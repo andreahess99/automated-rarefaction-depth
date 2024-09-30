@@ -1,0 +1,2 @@
+include versioneer.py
+include automated_rarefaction_depth/_version.py
