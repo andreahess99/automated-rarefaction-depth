@@ -9,10 +9,13 @@
 from qiime2.plugin import (Plugin, Str, Properties, Choices, Int, Bool, Range,
                            Float, Set, Visualization, Metadata, MetadataColumn,
                            Categorical, Numeric, Citations, Threads)
-from q2_types.feature_table import FeatureTable, Frequency
 import q2_diversity
+from q2_types.feature_table import FeatureTable, Frequency
+from q2_types.sample_data import AlphaDiversity, SampleData
+from q2_types.tree import Phylogeny, Rooted
 from automated_rarefaction_depth import __version__
 from automated_rarefaction_depth._methods import duplicate_table
+
 
 citations = Citations.load("citations.bib", package="automated_rarefaction_depth")
 
@@ -70,7 +73,7 @@ plugin.pipelines.register_function(
 )
 
 #example visualizer
-plugin.visualizers.register_function(
+"""plugin.visualizers.register_function(
     function=q2_diversity.alpha_group_significance,
     inputs={'alpha_diversity': SampleData[AlphaDiversity]},
     parameters={'metadata': Metadata},
@@ -83,6 +86,32 @@ plugin.visualizers.register_function(
     name='Alpha diversity comparisons',
     description=("Visually and statistically compare groups of alpha diversity"
                  " values."),
+    citations=[citations['kruskal1952use']],
+    examples={'alpha_group_significance_faith_pd':
+              ex.alpha_group_significance_faith_pd}
+)"""
+
+plugin.visualizers.register_function(
+    function=automated_rarefaction_depth.rarefaction_depth,
+    inputs={'alpha_diversity': SampleData[AlphaDiversity], 'table': FeatureTable[Frequency], 'phylogeny': Phylogeny[Rooted]},
+    parameters={'metadata': Metadata, 'n_samples': Float % Range(0, 1), 'margin': Int % Range(0, None)},
+    input_descriptions={
+        'alpha_diversity': ('Vector of alpha diversity values by sample.'),
+        'table': ('The feature table containing the samples for which alpha '
+                  'diversity should be computed.'),
+        'phylogeny': ('Phylogenetic tree containing tip identifiers that '
+                      'correspond to the feature identifiers in the table. '
+                      'This tree can contain tip ids that are not present in '
+                      'the table, but all feature ids in the table must be '
+                      'present in this tree.')
+    },
+    parameter_descriptions={
+        'metadata': 'The sample metadata.',
+        'n_samples': 'The lower bound of the percentage of your samples want to keep.',
+        'margin': 'The percentage of the margin that would still be acceptable if plus/minus the n_samples. If you want n_samples to be a hard cutoff, set this parameter to 0.'
+    },
+    name='Automated Rarefaction Depth',
+    description=("Automatically computes an optimal rarefaction depth."),
     citations=[citations['kruskal1952use']],
     examples={'alpha_group_significance_faith_pd':
               ex.alpha_group_significance_faith_pd}
