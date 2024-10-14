@@ -22,8 +22,87 @@ import q2templates
 import biom
 import itertools
 
+from kneed import KneeLocator
 from . import METRICS
 from q2_types.tree import NewickFormat
+
+
+#my automated rarefaction depth function
+def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: NewickFormat = None, metrics: set = None,
+                                metadata: qiime2.Metadata = None, iterations: int = 10, p_samples: float = 0.8) -> None:
+    
+    min_depth = 1
+    #calculate the max reads that were used
+    table_df = table.view(pd.DataFrame)
+    reads = table_df.sum(axis=0) #not the right way to get this info -> change it
+    max_depth = qiime2.plugin.Int(reads.max())
+
+    steps = max_depth / 10
+
+    sorted_depths = reads.sort_values()
+
+    # calculate the index for the p_sample loss (as an integer)
+    sample_loss_index = int(np.ceil((1-p_samples) * len(sorted_depths))) - 1 #len(sorted_depths)=number of samples
+
+    # get the sequencing depth at the sample loss index (p_samples of all samples will have fewer reads)
+    # 1 - depth_threshold is the range of possible, valid values for the knee
+    depth_threshold = qiime2.plugin.Int(sorted_depths.iloc[sample_loss_index])
+
+    # make a new filtered df to use for finding the knee
+    # filter samples by depth_threshold, only keep the ones >= 
+    filtered_samples = reads[reads >= depth_threshold].index
+    filtered_table = table_df[filtered_samples]
+
+    # function to subsample a sample down to the depth_threshold, incl several iterations for statistical validity 
+    def subsample_sample(sample_series, depth):
+        subsample_counts = np.zeros(sample_series.shape)  
+        for i in range(iterations):
+            subsample = sample_series.sample(n=depth, replace=False)
+            subsample_counts += subsample.reindex(sample_series.index, fill_value=0)
+        return (subsample_counts / iterations)
+
+    # Subsample samples with more than depth_threshold reads
+    # each column is a sample, each row is a different feature/species
+    subsampled_table = filtered_table.apply(
+        lambda sample: subsample_sample(sample, depth_threshold) if sample.sum() > depth_threshold else sample,
+        axis=0 #adjust once I know where to find the number of reads!!
+    )
+
+    num_samples = len(subsampled_table)
+    located_points = np.zeros(num_samples)
+
+    #calculating the knee point
+
+    #using kneedle algorithm/ Knee_locator function
+    #finding the knee for each sample (curve)
+    for i in range(num_samples):
+        #using the kneeLocator object to find the knee of the curve
+        x =     # number of reads (probably just index of the y-value)
+        y =     # sum of all different features so far
+        knee_locator = KneeLocator(x, y, curve='concave', direction='increasing')
+        located_points[i] = knee_locator.elbow #gives the x-value of the proposed knee point
+
+    """#using the gradient method
+    for i in range(num_samples):
+        curr_array = subsampled_table.iloc[:, i].to_numpy() 
+        first_derivative = np.gradient(curr_array)
+        second_derivative = np.gradient(first_derivative)
+        located_points[i] = subsampled_table[np.argmax(second_derivative)]"""
+
+    #taking the mean of all located_points to get the average knee point
+    knee_point = located_points.mean() 
+
+    
+    #plotting the rarefaction curve including the determined depth etc
+    f_table = _compute_rarefaction_data(table, min_depth, max_depth, steps, iterations, phylogeny, metrics)
+    
+
+
+
+
+
+
+
 
 
 #example visualizer copied from q2-diversity/q2_diversity/_alpha/_visualizer.py
