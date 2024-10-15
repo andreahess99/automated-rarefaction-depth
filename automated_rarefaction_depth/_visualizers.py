@@ -21,9 +21,11 @@ from statsmodels.sandbox.stats.multicomp import multipletests
 import q2templates
 import biom
 import itertools
+from qiime2 import Artifact
 
 from kneed import KneeLocator
-from . import METRICS
+#from qiime2.plugins.diversity.methods import alpha
+#from . import METRICS
 from q2_types.tree import NewickFormat
 
 
@@ -35,7 +37,9 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     #calculate the max reads that were used
     table_df = table.view(pd.DataFrame)
     reads = table_df.sum(axis=0) #not the right way to get this info -> change it
-    max_depth = qiime2.plugin.Int(reads.max())
+    print(reads)
+    print(reads.max())
+    max_depth =  int(reads.max())
 
     steps = max_depth / 10
 
@@ -46,7 +50,7 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
     # get the sequencing depth at the sample loss index (p_samples of all samples will have fewer reads)
     # 1 - depth_threshold is the range of possible, valid values for the knee
-    depth_threshold = qiime2.plugin.Int(sorted_depths.iloc[sample_loss_index])
+    depth_threshold = int(sorted_depths.iloc[sample_loss_index])
 
     # make a new filtered df to use for finding the knee
     # filter samples by depth_threshold, only keep the ones >= 
@@ -77,8 +81,9 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     #finding the knee for each sample (curve)
     for i in range(num_samples):
         #using the kneeLocator object to find the knee of the curve
-        x =     # number of reads (probably just index of the y-value)
-        y =     # sum of all different features so far
+        #-> change x & y values!!! supposed to be arrays
+        x = 1    # number of reads (probably just index of the y-value)
+        y =  1   # sum of all different features so far
         knee_locator = KneeLocator(x, y, curve='concave', direction='increasing')
         located_points[i] = knee_locator.elbow #gives the x-value of the proposed knee point
 
@@ -95,11 +100,12 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     
     #plotting the rarefaction curve including the determined depth etc
     f_table = _compute_rarefaction_data(table, min_depth, max_depth, steps, iterations, phylogeny, metrics)
-    
 
 
-
-
+#to test & get outputs -> delete in the end
+feature_table_path = "../../table.qza"
+ft_artifact = qiime2.Artifact.load(feature_table_path)
+automated_rarefaction_depth("../../", ft_artifact)
 
 
 
