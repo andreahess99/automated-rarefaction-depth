@@ -55,7 +55,7 @@ def subsample_feature_table(feature_table, depths):
                 rarefied_sample = rarefy(sample_counts, depth)
                 rarefied_data.append((depth, sample, rarefied_sample))
             else:
-                # If a sample has fewer reads than the rarefaction depth, set it to NaN or 0
+                # If a sample has fewer reads than the rarefaction depth, set it to NaN 
                 rarefied_data.append((depth, sample, np.nan * np.ones(feature_table.shape[1])))
 
         
@@ -63,11 +63,7 @@ def subsample_feature_table(feature_table, depths):
     rarefied_df = pd.DataFrame([data for _, _, data in rarefied_data], index=index, columns=feature_table.columns)
 
     return rarefied_df
-    # Combine results into a single DataFrame
-    # Using list comprehension
-    """return pd.concat(
-        {depth: pd.DataFrame(rarefied_tables[depth], index=feature_table.index, columns=feature_table.columns)
-         for depth in depths}, axis=1)"""
+    
 
 def rarefy(counts, depth):
     """
@@ -101,8 +97,9 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     steps = 20
     #calculate the max reads that were used
     table_df = table.view(pd.DataFrame)
+    num_samples = len(table_df)
     reads_per_sample = table_df.sum(axis=1) 
-    #print(table_df)
+    print(table_df)
     #print(reads_per_sample)
     #print(reads_per_sample.max())
     max_depth =  int(reads_per_sample.max())
@@ -116,6 +113,10 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     # 1 - depth_threshold is the range of possible & valid values for the knee
     depth_threshold = int(sorted_depths.iloc[sample_loss_index])
     print("depth threshold:", depth_threshold)
+
+    #3d array for storing depths and number_distinct_features per sample
+    #per sample two lists, which have the same length, depths_i and #features_i
+    #features_3d = np.empty((num_samples, 2), dtype=object)
     
     #the points that I will look at & calculate everything for
     depth_range = np.linspace(min_depth, depth_threshold, num=steps, dtype=int) 
@@ -123,59 +124,76 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
     # make a new filtered df to use for finding the knee, including subsampling at the specified depths
     rarefied_df = subsample_feature_table(table_df, depth_range)
+
     print("rarefied_df:")
     print(rarefied_df)
     print("rarefied_df_index:")
     print(rarefied_df.index)
-    print(rarefied_df.shape)  # Number of rows and columns
-    print(rarefied_df.columns)  # Column names
-
-    """# filter samples by depth_threshold, only keep the ones <= 
-    filtered_samples = reads_per_sample[reads_per_sample <= depth_threshold].index
-    print("DataFrame Columns:", table_df.columns)
-    print("Filtered Samples:", filtered_samples.columns)
-    filtered_table = table_df[filtered_samples]
-
-    # function to subsample a sample down to the depth_threshold, incl several iterations for statistical validity 
-    def subsample_sample(sample_series, depth):
-        subsample_counts = np.zeros(sample_series.shape)  
-        for i in range(iterations):
-            subsample = sample_series.sample(n=depth, replace=False)
-            subsample_counts += subsample.reindex(sample_series.index, fill_value=0)
-        return (subsample_counts / iterations)
-
-    # Subsample samples with more than depth_threshold reads
-    # each row is a sample, each column is a different feature/species
-    subsam_t = filtered_table.subsample(depth_threshold, axis=1, by_id=False,
-                            with_replacement=False)"""
+    print(rarefied_df.shape)  
+    print(rarefied_df.columns)  
     
-    num_samples = len(table_df)
+    #add the highest sequencing depth for every sample such that kneedle algo will work
+    rarefied_without_maxdepth_df = rarefied_df
+    max_depth_data = []
+    for sample in table_df.index:
+        sample_max_depth = table_df.loc[sample].sum()  # max sequencing depth for this sample
+        max_depth_values = table_df.loc[sample].values  # abundance values at max depth
+        max_depth_data.append((sample_max_depth, sample, max_depth_values))
 
-    #calculating the knee point
-    knee_points = {}
+    # Convert max_depth_data to a df and append it to rarefied_df
+    index = pd.MultiIndex.from_tuples([(depth, sample) for depth, sample, _ in max_depth_data])
+    max_depth_df = pd.DataFrame([data for _, _, data in max_depth_data], index=index, columns=table_df.columns)
+
+    # Append the maximum depth data to the original rarefied_df
+    rarefied_df = pd.concat([rarefied_df, max_depth_df])
+    print("concatenated rarefied_df & max_depth_values", rarefied_df)
+
     #only for dev -> delete later
     plt.figure(figsize=(8, 6))
 
+    #calculating the knee point
+    knee_points = {}
     for sample in table_df.index:
-        # Extract rarefied counts for this sample across all depths
+        d_range = depth_range
+        #extract rarefied counts for this sample across all depths
         sample_rarefied_data = rarefied_df.xs(sample, level=1, axis=0)
         print("sample_rarefied_data: ", sample_rarefied_data)
         
         # calculate how many different species have been seen at each depth
-        num_different_features = (sample_rarefied_data != 0).sum(axis=1).values
-        print("num_different_features", num_different_features)
-
-        #just for visualizations of a single sample during development -> delete later!!
-        #plt.figure(figsize=(8, 6))
-        plt.plot(depth_range, num_different_features, marker='o', linestyle='-', label=sample)
-        """plt.xlabel('Sequencing Depth')
-        plt.ylabel('Observed Features')
-        plt.title('Rarefaction Curve')
-        plt.legend()
-        plt.savefig('example_curve.png')"""
+        #num_different_features = (sample_rarefied_data != 0).sum(axis=1).values
+        num_different_features = ((sample_rarefied_data != 0) & ~np.isnan(sample_rarefied_data)).sum(axis=1).values
         
-        # Use KneeLocator to find the knee point (depth where total abundance starts leveling off)
-        kneedle = KneeLocator(depth_range, num_different_features, curve="concave", direction="increasing")
+        #non_zero_count = np.count_nonzero(table_df.loc[sample].values)
+
+        
+        #print("non_zero_count:", non_zero_count)
+        #plt.figure(figsize=(8, 6))
+
+        if (depth_threshold > reads_per_sample[sample]):
+            wout_max = rarefied_without_maxdepth_df.xs(sample, level=1, axis=0)
+            num_diff_feat_without_max = ((wout_max != 0) & ~np.isnan(wout_max)).sum(axis=1).values
+            print("num_diff_feat_without_max:", num_diff_feat_without_max)
+            print("shape num_diff_feat_without_max:", num_diff_feat_without_max.shape)
+            print("shape d_range:", d_range.shape)
+            #just for visualizations of a single sample during development -> delete later!!
+            plt.plot(d_range, num_diff_feat_without_max, marker='o', linestyle='-', label=sample)
+            kneedle = KneeLocator(depth_range, num_diff_feat_without_max, curve="concave", direction="increasing")
+        else:
+            print("num_different_features:", num_different_features)
+            #adding the max_depth for this sample
+            d_range = np.append(depth_range, reads_per_sample[sample])
+            #print("d_range:", d_range)
+
+            #just for visualizations of a single sample during development -> delete later!!
+            plt.plot(d_range, num_different_features, marker='o', linestyle='-', label=sample)
+            """plt.xlabel('Sequencing Depth')
+            plt.ylabel('Observed Features')
+            plt.title('Rarefaction Curve')
+            plt.legend()
+            plt.savefig('example_curve.png')"""
+            
+            # Use KneeLocator to find the knee point (depth where total abundance starts leveling off)
+            kneedle = KneeLocator(d_range, num_different_features, curve="concave", direction="increasing")
         
         # Store the knee point for this sample
         knee_points[sample] = kneedle.knee
@@ -221,6 +239,28 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     plt.grid(axis='y')
     plt.tight_layout()
     plt.savefig('knee_points.png')
+
+    #finding +-5% points
+    #finding out what percentile my knee point is at
+    print("sorted_depths:", sorted_depths)
+    index = np.searchsorted(sorted_depths, knee_point)
+    percentile = (index / len(sorted_depths)) * 100
+
+    #calculate the +-5% percentiles & ensuring it won't be out of bounds
+    lower_percentile = max(percentile - 5, 0) 
+    upper_percentile = min(percentile + 5, 100) 
+
+    #convert these percentiles to indices for the sorted_depths array
+    lower_index = int((lower_percentile / 100) * len(sorted_depths))
+    upper_index = min(int((upper_percentile / 100) * len(sorted_depths)), len(sorted_depths) - 1)
+
+    #get the values corresponding to these indices
+    lower_value = sorted_depths.iloc[lower_index]
+    upper_value = sorted_depths.iloc[upper_index]
+
+    print(f"The target value {knee_point} is at the {percentile:.2f}% percentile.")
+    print(f"The value at {percentile-5:.2f}% is approximately {lower_value}.")
+    print(f"The value at {percentile+5:.2f}% is approximately {upper_value}.")
 
     
     #plotting the rarefaction curve including the determined depth etc
