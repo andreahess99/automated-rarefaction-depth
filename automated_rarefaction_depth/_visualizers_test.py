@@ -94,17 +94,15 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
                                 metadata: qiime2.Metadata = None, iterations: int = 10, p_samples: float = 0.8) -> None:
     
     min_depth = 1
-    steps = 20
+    steps = 50
     #calculate the max reads that were used
     table_df = table.view(pd.DataFrame)
     num_samples = len(table_df)
     reads_per_sample = table_df.sum(axis=1) 
     print(table_df)
-    #print(reads_per_sample)
-    #print(reads_per_sample.max())
     max_depth =  int(reads_per_sample.max())
-
     sorted_depths = reads_per_sample.sort_values()
+    print("sorted depths:", sorted_depths)
 
     # calculate the index for the p_sample loss (as an integer)
     sample_loss_index = int(np.ceil((1-p_samples) * len(sorted_depths))) - 1 #len(sorted_depths)=number of samples
@@ -114,21 +112,21 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     depth_threshold = int(sorted_depths.iloc[sample_loss_index])
     print("depth threshold:", depth_threshold)
 
-    #3d array for storing depths and number_distinct_features per sample
-    #per sample two lists, which have the same length, depths_i and #features_i
-    #features_3d = np.empty((num_samples, 2), dtype=object)
     
     #the points that I will look at & calculate everything for
     depth_range = np.linspace(min_depth, depth_threshold, num=steps, dtype=int) 
+    #max_range = np.linspace(min_depth, max_depth, num=steps, dtype=int)
+    max_range = np.linspace(min_depth, 10*depth_threshold, num=steps, dtype=int)
     print("depth range:", depth_range)
+    print("max range:", max_range)
 
     #new approach where I only make one averaged curve and find the knee point there
     samples_acc = [None] * num_samples
     s = 0
     for sample in table_df.index:
         acc = []
-        for i in depth_range:
-            if (i > reads_per_sample[s]):
+        for i in max_range: #in depth_range
+            if (i > reads_per_sample.iloc[s]): 
                 break
             else:
                 rarefied_sample = rarefy(table_df.loc[sample].values, i)
@@ -137,53 +135,43 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
         samples_acc[s] = acc
         s += 1
-    print("samples_acc:", samples_acc) 
+        if(s % 100 == 0):
+            print("Processed", s, "samples.")
+    #print("samples_acc:", samples_acc) 
     
     #loop through all depths and calculate the average for each
-    c = len(depth_range)
+    c = len(max_range) # len(depth_range)
     sample_avg = [None] * c
     for i in range(c):
         sum = 0
         num = 0
         for j in samples_acc:
-            print("len(j): ", len(j))
             if (i >= len(j)):
-                break
+                continue 
             else:
-                sum += j[i] #is this accessing the right element?
+                sum += j[i] 
                 num += 1
-        print("i = ", i)
         sample_avg[i] = sum / num
         
-
-
+    print("sample_avg:", sample_avg)
     #calculating the knee point
     #just for visualizations of a single sample during development -> delete later!!
     plt.figure(figsize=(8, 6))
-    plt.plot(depth_range, sample_avg, marker='o', linestyle='-', label=sample)
+    #plt.plot(depth_range, sample_avg, marker='o', linestyle='-', label=sample)
+    plt.plot(max_range, sample_avg, marker='o', linestyle='-', label=sample)
     plt.xlabel('Sequencing Depth')
     plt.ylabel('Observed Features')
     plt.title('Rarefaction Curve')
     plt.legend()
-    plt.savefig('example_curve_test.png')
+    plt.savefig('example_curve_test_tendepth.png')
             
     # Use KneeLocator to find the knee point (depth where total abundance starts leveling off)
-    kneedle = KneeLocator(depth_range, sample_avg, curve="concave", direction="increasing")
-        
-    # Store the knee point for this sample
+    #kneedle = KneeLocator(depth_range, sample_avg, curve="concave", direction="increasing")
+    kneedle = KneeLocator(max_range, sample_avg, curve="concave", direction="increasing")
+    # Store the knee point 
     knee_point = kneedle.knee
-
-
     print("Knee_point:", knee_point)
-    #using kneedle algorithm/ Knee_locator function
-    #finding the knee for each sample (curve)
-    """ for i in range(num_samples):
-        #using the kneeLocator object to find the knee of the curve
-        #-> change x & y values!!! supposed to be arrays
-        x = 1    # number of reads (probably just index of the y-value)
-        y =  1   # sum of all different features so far
-        knee_locator = KneeLocator(x, y, curve='concave', direction='increasing')
-        located_points[i] = knee_locator.elbow #gives the x-value of the proposed knee point"""
+    
 
     """#using the gradient method
     for i in range(num_samples):
@@ -192,11 +180,9 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
         second_derivative = np.gradient(first_derivative)
         located_points[i] = subsampled_table[np.argmax(second_derivative)]"""
 
-    
 
     #finding +-5% points
     #finding out what percentile my knee point is at
-    print("sorted_depths:", sorted_depths)
     index = np.searchsorted(sorted_depths, knee_point)
     percentile = (index / len(sorted_depths)) * 100
 
@@ -218,14 +204,11 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
     
 
-
-
 #to test & get outputs -> delete in the end
-feature_table_path = "../../table.qza"
+#feature_table_path = "../../table.qza"
+#other feature table
+feature_table_path = "../../feature-table.qza"
 ft_artifact = qiime2.Artifact.load(feature_table_path)
 automated_rarefaction_depth("../../", ft_artifact)
-
-
-
 
 
