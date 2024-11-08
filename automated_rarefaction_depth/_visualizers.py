@@ -269,6 +269,8 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
 #to test & get outputs -> delete in the end
 feature_table_path = "../../table.qza"
+#other feature table
+#feature_table_path = "../../feature-table.qza"
 ft_artifact = qiime2.Artifact.load(feature_table_path)
 automated_rarefaction_depth("../../", ft_artifact)
 

@@ -107,6 +107,7 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     #table_df =  table_df.iloc[:(num_samples // 8)]
     reads_per_sample = table_df.sum(axis=1) 
     max_depth =  int(reads_per_sample.max())
+    print("shape of table_df:", table_df.shape)
 
     sorted_depths = reads_per_sample.sort_values()
 
@@ -217,9 +218,9 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
 
 #to test & get outputs -> delete in the end
-feature_table_path = "../../table.qza"
+#feature_table_path = "../../table.qza"
 #other feature table -> a lot bigger
-#feature_table_path = "../../feature-table.qza"
+feature_table_path = "../../feature-table.qza"
 ft_artifact = qiime2.Artifact.load(feature_table_path)
 automated_rarefaction_depth("../../", ft_artifact)
 
