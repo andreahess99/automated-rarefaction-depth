@@ -97,6 +97,22 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     steps = 10
     #calculate the max reads that were used
     table_df = table.view(pd.DataFrame)
+    if table_df.empty:
+        raise ValueError("The feature table is empty.")
+    #adjusting table size if it's too big -> keep ~1000 rows
+    if (len(table_df) > 1000):
+        step = len(table_df) // 1000  # Calculate step to approximately keep 1000 rows
+        table_df = table_df.iloc[::step]    # Keep every 'step' row
+        table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] #remove columns where all values are either 0 or NaN
+        #table_df = table_df.iloc[:len(table_df) // 20] #what value to use? more primitve version
+
+    """#delete the top 5 and bottom 5 samples
+    table_df['row_sum'] = table_df.sum(axis=1)
+    df_sorted = table_df.sort_values(by='row_sum')
+    df_filtered = df_sorted.iloc[5:-5]
+    df_filtered = df_filtered.drop(columns='row_sum')
+    table_df = df_filtered"""
+
     num_samples = len(table_df)
     reads_per_sample = table_df.sum(axis=1) 
     print(table_df)
@@ -141,12 +157,16 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
         
         #using the gradient method
         curr_array = array_sample_avg
-
-        first_derivative = np.gradient(curr_array, max_range)
+        """first_derivative = np.gradient(curr_array, max_range)
         second_derivative = np.gradient(first_derivative, max_range)
         max_index = np.argmax(second_derivative)
-        corresponding_depth = max_range[max_index]
-        knee_points[s] = corresponding_depth
+        knee_points[s] = max_range[max_index]"""
+
+        #ratio of the slopes method
+        slopes = np.gradient(curr_array, max_range)
+        ratios = slopes[:-1] / slopes[1:]
+        knee_point_index = np.argmin(ratios)  # or where the ratio falls below a chosen threshold
+        knee_points[s] = max_range[knee_point_index]
        
         if(s % 200 == 0):
             print("Processed", s, "samples.")
@@ -200,8 +220,8 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 #to test & get outputs -> delete in the end
 #feature_table_path = "../../table.qza"
 #other feature tables
-feature_table_path = "../../atacama_soil_table.qza"
-#feature_table_path = "../../parkinson_mouse_dada2_table.qza"
+#feature_table_path = "../../atacama_soil_table.qza"
+feature_table_path = "../../parkinson_mouse_dada2_table.qza"
 #very big one
 #feature_table_path = "../../feature-table.qza"
 ft_artifact = qiime2.Artifact.load(feature_table_path)

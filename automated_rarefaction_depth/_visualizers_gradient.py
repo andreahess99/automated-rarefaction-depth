@@ -129,13 +129,7 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     spacing = depth_range[1] - depth_range[0]
     # make a new filtered df to use for finding the knee, including subsampling at the specified depths
     rarefied_df = subsample_feature_table(table_df, depth_range)
-
-    print("rarefied_df:")
-    print(rarefied_df)
-    print("rarefied_df_index:")
-    print(rarefied_df.index)
-    print(rarefied_df.shape)  
-    print(rarefied_df.columns)  
+    print("rarefied_df:", rarefied_df)
 
     #only for dev -> delete later
     plt.figure(figsize=(8, 6))
@@ -162,8 +156,8 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
         if length_difference > 0:
             depth_range = depth_range[:-length_difference]  # Remove the last 'length_difference' elements
         curr_array = non_zero_array
-
-        plt.plot(depth_range, non_zero_array, marker='o', linestyle='-', label=sample)
+        if (i < 10 and i > 0): #plot only the first 5 samples:
+            plt.plot(depth_range, non_zero_array, marker='o', linestyle='-', label=sample)
         
         
         first_derivative = np.gradient(curr_array, spacing)
@@ -187,7 +181,7 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     plt.savefig('rarefaction_curves_gradient.png')
 
     #taking the mean of all located_points to get the average knee point
-    knee_point = np.mean(located_points)
+    knee_point = round(np.mean(located_points))
     print("Knee_point:", knee_point)
 
     #finding +-5% points
@@ -218,9 +212,11 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
 
 #to test & get outputs -> delete in the end
-#feature_table_path = "../../table.qza"
+feature_table_path = "../../table.qza"
+#feature_table_path = "../../atacama_soil_table.qza"
+#feature_table_path = "../../parkinson_mouse_dada2_table.qza"
 #other feature table -> a lot bigger
-feature_table_path = "../../feature-table.qza"
+#feature_table_path = "../../feature-table.qza"
 ft_artifact = qiime2.Artifact.load(feature_table_path)
 automated_rarefaction_depth("../../", ft_artifact)
 

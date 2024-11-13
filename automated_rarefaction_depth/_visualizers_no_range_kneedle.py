@@ -61,10 +61,27 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     
     min_depth = 1
     steps = 20
-    #calculate the max reads that were used
     table_df = table.view(pd.DataFrame)
-    #table_df = table_df.iloc[:len(table_df) // 20] #for testing purposes of very big tables
+    if table_df.empty:
+        raise ValueError("The feature table is empty.")
+    #adjusting table size if it's too big -> keep ~1000 rows
+    if (len(table_df) > 1000):
+        step = len(table_df) // 1000  # Calculate step to approximately keep 1000 rows
+        table_df = table_df.iloc[::step]    # Keep every 'step' row
+        table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] #remove columns where all values are either 0 or NaN
+        #table_df = table_df.iloc[:len(table_df) // 20] #what value to use? more primitve version
+
+    """
+    if (len(table_df) > 100):
+        #delete the top 5 and bottom 5 samples
+        table_df['row_sum'] = table_df.sum(axis=1)
+        df_sorted = table_df.sort_values(by='row_sum')
+        df_filtered = df_sorted.iloc[5:-5]
+        df_filtered = df_filtered.drop(columns='row_sum')
+        table_df = df_filtered"""
+
     num_samples = len(table_df)
+    #calculate the max reads that were used
     reads_per_sample = table_df.sum(axis=1) 
     #print(table_df)
     max_depth =  int(reads_per_sample.max())
@@ -98,8 +115,9 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
                 array_sample[j, i] = c
                 
         array_sample_avg = np.mean(array_sample, axis=0)
+        #array_sample_median = np.median(array_sample, axis=0)
 
-        if (s < 44 and s > 34): #plot only the first 5 samples
+        if (s < 64 and s > 34): #plot only the first 5 samples
             plt.plot(max_range, array_sample_avg, marker='o', linestyle='-', label=sample)
         
         # Use KneeLocator to find the knee point (depth where total abundance starts leveling off)
@@ -118,8 +136,12 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     plt.savefig('example_curve_no_range.png')
 
     #calculate the average of all knee points
-    knee_point_avg = np.mean(knee_points)
+    # Filter out None values
+    knee_points_filtered = [point for point in knee_points if point is not None]
+    knee_point_avg = round(np.mean(knee_points_filtered))
+    #knee_point_median = round(np.median(knee_points))
     print("knee points:", knee_points)
+    
 
     knee_point = knee_point_avg
     #checking if the knee point is in the range of acceptable values
@@ -156,8 +178,8 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 #to test & get outputs -> delete in the end
 #feature_table_path = "../../table.qza"
 #other feature tables
-feature_table_path = "../../atacama_soil_table.qza"
-#feature_table_path = "../../parkinson_mouse_dada2_table.qza"
+#feature_table_path = "../../atacama_soil_table.qza"
+feature_table_path = "../../parkinson_mouse_dada2_table.qza"
 #very big one
 #feature_table_path = "../../feature-table.qza"
 ft_artifact = qiime2.Artifact.load(feature_table_path)
