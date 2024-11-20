@@ -90,7 +90,7 @@ def rarefy(counts, depth):
 
 
 #my automated rarefaction depth function
-def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: NewickFormat = None, metrics: set = None,
+def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: NewickFormat = None,
                                 metadata: qiime2.Metadata = None, iterations: int = 10, p_samples: float = 0.8) -> None:
     
     min_depth = 1
@@ -164,7 +164,6 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
         num_different_features = ((sample_rarefied_data != 0) & ~np.isnan(sample_rarefied_data)).sum(axis=1).values
         
         #non_zero_count = np.count_nonzero(table_df.loc[sample].values)
-
         
         #print("non_zero_count:", non_zero_count)
         #plt.figure(figsize=(8, 6))
@@ -186,11 +185,6 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
             #just for visualizations of a single sample during development -> delete later!!
             plt.plot(d_range, num_different_features, marker='o', linestyle='-', label=sample)
-            """plt.xlabel('Sequencing Depth')
-            plt.ylabel('Observed Features')
-            plt.title('Rarefaction Curve')
-            plt.legend()
-            plt.savefig('example_curve.png')"""
             
             # Use KneeLocator to find the knee point (depth where total abundance starts leveling off)
             kneedle = KneeLocator(d_range, num_different_features, curve="concave", direction="increasing")
@@ -215,13 +209,6 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
         y =  1   # sum of all different features so far
         knee_locator = KneeLocator(x, y, curve='concave', direction='increasing')
         located_points[i] = knee_locator.elbow #gives the x-value of the proposed knee point"""
-
-    """#using the gradient method
-    for i in range(num_samples):
-        curr_array = subsampled_table.iloc[:, i].to_numpy() 
-        first_derivative = np.gradient(curr_array)
-        second_derivative = np.gradient(first_derivative)
-        located_points[i] = subsampled_table[np.argmax(second_derivative)]"""
 
     #taking the mean of all located_points to get the average knee point
     knee_point = sum(knee_points.values()) / len(knee_points.values()) 

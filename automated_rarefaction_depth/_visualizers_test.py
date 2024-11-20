@@ -90,7 +90,7 @@ def rarefy(counts, depth):
 
 
 #my automated rarefaction depth function
-def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: NewickFormat = None, metrics: set = None,
+def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: NewickFormat = None,
                                 metadata: qiime2.Metadata = None, iterations: int = 10, p_samples: float = 0.8) -> None:
     
     min_depth = 1
