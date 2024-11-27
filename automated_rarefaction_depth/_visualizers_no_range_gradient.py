@@ -26,6 +26,7 @@ from qiime2 import Artifact
 
 from kneed import KneeLocator
 import time
+import psutil
 import tracemalloc
 #from qiime2.plugins.diversity.methods import alpha
 #from . import METRICS
@@ -33,7 +34,7 @@ from q2_types.tree import NewickFormat
 
 
 #helper functions
-def rarefy(counts, depth, iter):
+def rarefy(counts, depth, iter, seed):
     """
     Rarefy a single sample to a specified depth by subsampling without replacement.
     
@@ -49,7 +50,7 @@ def rarefy(counts, depth, iter):
     
     # Generate the rarefied sample by randomly subsampling without replacement
     #set a seed for reproducibility
-    np.random.seed(iter+6)
+    np.random.seed(iter+seed)
     counts = counts.astype(int)
     reads = np.repeat(np.arange(len(counts)), counts)  # Create a list of read indices based on counts
     subsampled_reads = np.random.choice(reads, size=depth, replace=False)  # Subsample without replacement
@@ -60,15 +61,15 @@ def rarefy(counts, depth, iter):
 
 
 #my automated rarefaction depth function
-def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: NewickFormat = None,
-                                metadata: qiime2.Metadata = None, iterations: int = 10, p_samples: float = 0.8) -> None:
+def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: NewickFormat = None, seed: int = 42,
+                                metadata: qiime2.Metadata = None, iterations: int = 10, table_size: int = None,
+                                steps: int = 20, p_samples: float = 0.8, algorithm: str = 'kneedle') -> None:
 
     # Measure runtime & memory usage
     start_time = time.time()
     tracemalloc.start() 
 
     min_depth = 1
-    steps = 20
     #calculate the max reads that were used
     table_df = table.view(pd.DataFrame)
 
@@ -92,10 +93,10 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     print("done")"""
 
     #for filtering the cancer microbiome dataset to a smaller size
-    alt_table = table_df.sum(axis=1).sort_values().iloc[5300:5500]
+    """alt_table = table_df.sum(axis=1).sort_values().iloc[6950:7000]
     filtered_df = table_df.loc[alt_table.index]
     table_df = filtered_df
-
+"""
     #for filtering the moving pictures tuotrial dataset to a smaller size
     """alt_table = table_df.sum(axis=1).sort_values().iloc[22:33]
     filtered_df = table_df.loc[alt_table.index]
@@ -104,9 +105,10 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
     if table_df.empty:
         raise ValueError("The feature table is empty.")
-    #adjusting table size if it's too big -> keep ~1000 rows
-    if (len(table_df) > 500):
-        table_df = table_df.sample(n=500, random_state=1)  #randomly select 1000 rows, set random_state for reproducibility
+    table_size = 200
+    #adjusting table size if it's too big -> keep table_size rows
+    if (table_size is not None and len(table_df) > table_size):
+        table_df = table_df.sample(n=table_size, random_state=seed)  #randomly select rows, set random_state for reproducibility
         table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] #remove columns where all values are either 0 or NaN
 
     """if(len(table_df) > 100):
@@ -146,50 +148,54 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
         for i in range(steps):
             for j in range(iterations):
-                rarefied_sample = rarefy(table_df.loc[sample].values, max_range[i], j) #vorher war es i anstatt max_range[i]
+                rarefied_sample = rarefy(table_df.loc[sample].values, max_range[i], j, seed) 
                 c = np.count_nonzero(rarefied_sample)
                 array_sample[j, i] = c
                 
         
         array_sample_avg = np.mean(array_sample, axis=0)
-        array_sample_median = np.median(array_sample, axis=0)
+        #array_sample_median = np.median(array_sample, axis=0)
 
         
         if (s < 50 and s > 4): #plot only the first 5 samples
-            plt.plot(max_range, array_sample_median, marker='o', linestyle='-', label=sample)
+            plt.plot(max_range, array_sample_avg, marker='o', linestyle='-', label=sample)
             #print("array sample:", array_sample)
             #print("array sample avg:", array_sample_avg)
         
         #using the gradient method
-        curr_array = array_sample_median
-        """first_derivative = np.gradient(curr_array, max_range)
+        curr_array = array_sample_avg
+        first_derivative = np.gradient(curr_array, max_range)
         second_derivative = np.gradient(first_derivative, max_range)
         max_index = np.argmax(second_derivative)
-        knee_points[s] = max_range[max_index]"""
+        knee_points[s] = max_range[max_index]
 
         #ratio of the slopes method
-        slopes = np.gradient(curr_array, max_range)
+        """slopes = np.gradient(curr_array, max_range)
         ratios = slopes[:-1] / slopes[1:]
         knee_point_index = np.argmin(ratios)  # or where the ratio falls below a chosen threshold
-        knee_points[s] = max_range[knee_point_index]
+        knee_points[s] = max_range[knee_point_index]"""
        
         if(s % 200 == 0):
             print("Processed", s, "samples.")
         s += 1
 
-    #just for visualizations of a single sample during development -> delete later!!
-    plt.xlabel('Sequencing Depth')
-    plt.ylabel('Observed Features')
-    plt.title('Rarefaction Curve')
-    plt.legend()
-    plt.savefig('example_curve_no_range_gradient.png')
 
     #calculate the average of all knee points
     knee_point_avg = round(np.mean(knee_points))
     knee_point_median = round(np.median(knee_points))
     print("knee point avg:", knee_point_avg)
     print("knee point median:", knee_point_median)
-    #print("knee points:", knee_points)
+
+    #just for visualizations of a single sample during development -> delete later!!
+    plt.axvspan(0, depth_threshold, color='peachpuff', alpha=0.75, label='Acceptable Range')
+    plt.axvline(x=knee_point_avg, color='red', linestyle='--', label='Vertical Line at Knee Point (avg)')
+    plt.axvline(x=knee_point_median, color='black', linestyle='--', label='Vertical Line at Knee Point (median)')
+    plt.xlabel('Sequencing Depth')
+    plt.ylabel('Observed Features')
+    plt.title('Rarefaction Curve')
+    plt.legend()
+    plt.savefig('example_curve_no_range_gradient.png')
+
 
     knee_point = knee_point_avg
     perc_avg = (np.searchsorted(sorted_depths, knee_point_avg) / len(sorted_depths)) * 100
@@ -220,7 +226,7 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
     print(f"The target value {knee_point_avg} is at the {perc_avg:.2f}% percentile.")
     print(f"The target value {knee_point} is at the {percentile:.2f}% percentile.")
-    print(f"The value at {percentile-5:.2f}% is approximately {lower_value}.")
+    print(f"The value at {max(percentile-5, 0):.2f}% is approximately {lower_value}.")
     print(f"The value at {percentile+5:.2f}% is approximately {upper_value}.")
 
     #end measuring runtime & memory usage
@@ -240,8 +246,6 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 #feature_table_path = "../../parkinson_mouse_dada2_table.qza"
 #very big one, cancer microbiome
 feature_table_path = "../../feature-table.qza"
-#truncated feature table
-#feature_table_path = "filtered_cancer_microbiome_table.qza"
 ft_artifact = qiime2.Artifact.load(feature_table_path)
 automated_rarefaction_depth("../../", ft_artifact)
 

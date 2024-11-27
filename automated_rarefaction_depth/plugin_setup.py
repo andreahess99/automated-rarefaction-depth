@@ -38,18 +38,26 @@ plugin.visualizers.register_function(
     function=automated_rarefaction_depth.rarefaction_depth,
     inputs={'table': FeatureTable[Frequency], 'phylogeny': Phylogeny[Rooted]},
     parameters={'metadata': Metadata,
+                'seed': Int % Range(1, None),
                 'p_samples': Float % Range(0, 1),
-                'iterations': Int % Range(1, None)},
+                'iterations': Int % Range(1, None),
+                'table_size': Int % Range(1, None),
+                'steps': Int % Range(1, 100),
+                'algorithm': ["kneedle", "gradient"]},
     input_descriptions={
         'table': ('Feature table to compute rarefaction curves from.'),
         'phylogeny': ('Optional phylogeny for phylogenetic metrics.')
     },
     parameter_descriptions={
         'metadata': 'The sample metadata.',
+        'seed': 'The seed used for random number generation.',
         'p_samples': 'The lower bound of the percentage of your samples want to keep.',
         'iterations': 'The number of rarefied feature tables to '
                        'compute at each step.',
-                       'metadata': 'The sample metadata.'
+                       'metadata': 'The sample metadata.',
+        'table_size': 'The number of samples to keep in the feature table.',
+        'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth.',
+        'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.'
     },
     name='Automated Rarefaction Depth',
     description=("Automatically computes an optimal rarefaction depth."),
