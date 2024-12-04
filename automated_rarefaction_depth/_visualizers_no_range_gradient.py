@@ -152,11 +152,9 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
                 c = np.count_nonzero(rarefied_sample)
                 array_sample[j, i] = c
                 
-        
         array_sample_avg = np.mean(array_sample, axis=0)
         #array_sample_median = np.median(array_sample, axis=0)
 
-        
         if (s < 50 and s > 4): #plot only the first 5 samples
             plt.plot(max_range, array_sample_avg, marker='o', linestyle='-', label=sample)
             #print("array sample:", array_sample)

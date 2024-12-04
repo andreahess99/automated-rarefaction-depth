@@ -25,6 +25,7 @@ import itertools
 from qiime2 import Artifact
 
 from kneed import KneeLocator
+import altair as alt
 import time
 import psutil
 import tracemalloc
@@ -33,7 +34,7 @@ import tracemalloc
 from q2_types.tree import NewickFormat
 
 
-#helper functions
+#helper function
 def rarefy(counts, depth, iter, seed):
     if sum(counts) < depth:
         raise ValueError(f"Sample has fewer reads ({sum(counts)}) than the rarefaction depth ({depth}).")
@@ -53,10 +54,8 @@ def rarefy(counts, depth, iter, seed):
 #my automated rarefaction depth function
 def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: NewickFormat = None, seed: int = 42,
                                 metadata: qiime2.Metadata = None, iterations: int = 10, table_size: int = None,
-                                steps: int = 20, p_samples: float = 0.8, algorithm: str = 'kneedle') -> None:
+                                steps: int = 20, p_samples: float = 0.95, algorithm: str = 'kneedle') -> None:
     
-    #check which algo is selected and run appropriate one -> to be implemented!!
-
     # Measure runtime & memory usage
     start_time = time.time()
     tracemalloc.start()
@@ -76,7 +75,7 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
     if table_df.empty:
         raise ValueError("The feature table is empty.")
-    #table_size = 100
+    #table_size = 200
     #adjusting table size if it's too big -> keep table_size rows
     if (table_size is not None and len(table_df) > table_size):
         table_df = table_df.sample(n=table_size, random_state=seed) #randomly select rows, set random_state for reproducibility
@@ -85,7 +84,6 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
 
     num_samples = len(table_df)
     reads_per_sample = table_df.sum(axis=1) 
-    #max_depth =  int(reads_per_sample.max())
     sorted_depths = reads_per_sample.sort_values()
     #print("sorted depths:", sorted_depths)
 
@@ -95,13 +93,14 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     # get the sequencing depth at the sample loss index (p_samples of all samples will have fewer reads)
     # 1 - depth_threshold is the range of possible & valid values for the knee
     depth_threshold = int(sorted_depths.iloc[sample_loss_index])
-    print("depth threshold:", depth_threshold)
+    #print("depth threshold:", depth_threshold)
   
 
     #go through every sample and calculate the observed features for each depth
     knee_points = [None] * num_samples
     s = 0
     plt.figure(figsize=(8, 6))
+    df_list = []
     
     for sample in table_df.index:
         max_range = np.linspace(min_depth, reads_per_sample.loc[sample], num=steps, dtype=int)
@@ -116,6 +115,9 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
                 array_sample[j, i] = c
                 
         array_sample_avg = np.mean(array_sample, axis=0)
+        #new, not sure if it's correct
+        sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample_avg, 'sample': sample})
+        df_list.append(sample_df)
 
         if (s < 50 and s > 10): #plot only 40 samples
             plt.plot(max_range, array_sample_avg, marker='o', linestyle='-', label=sample)
@@ -132,10 +134,13 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
             second_derivative = np.gradient(first_derivative, max_range)
             max_index = np.argmax(second_derivative)
             knee_points[s] = max_range[max_index]
+
         s += 1
         """if(s % 100 == 0):
             print("Processed", s, "samples.")"""
 
+    #new, not sure if it's correct
+    combined_df = pd.concat(df_list, ignore_index=True)
 
     # Filter out None values
     knee_points_filtered = [point for point in knee_points if point is not None]
@@ -159,8 +164,7 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     knee_point = knee_point_avg
     #checking if the knee point is in the range of acceptable values
     if (knee_point_avg > depth_threshold):
-        print("The knee point is above the depth threshold.")
-        
+        print("The knee point is above the depth threshold!")
 
     #finding +-5% points
     #finding out what percentile my knee point is at
@@ -180,10 +184,93 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     upper_value = sorted_depths.iloc[upper_index]
 
     perc_avg = (np.searchsorted(sorted_depths, knee_point_avg) / len(sorted_depths)) * 100
-    print(f"The target value {knee_point_avg} is at the {perc_avg:.2f}% percentile.")
-    print(f"The target value {knee_point} is at the {percentile:.2f}% percentile.")
-    print(f"The value at {max(percentile-5, 0):.2f}% is approximately {lower_value}.")
-    print(f"The value at {percentile+5:.2f}% is approximately {upper_value}.")
+    #print(f"The target value {knee_point} is at the {percentile:.2f}% percentile.")
+    #print(f"The value at {max(percentile-5, 0):.2f}% is approximately {lower_value}.")
+    #print(f"The value at {percentile+5:.2f}% is approximately {upper_value}.")
+
+    #plotting with altair
+    #plotting the rarefaction curves including the shaded area
+    # Depth thresholds for vertical lines
+    depth_lines = pd.DataFrame({
+        'x': [lower_value, knee_point, upper_value],  # x-values for vertical lines
+        'label': ['-5%', 'Knee point', '+5%'],
+        'color': ['black', 'red', 'black']  
+    })
+
+    chart = alt.Chart(combined_df).mark_line(point=True).encode(
+        x=alt.X('depth:Q', title='Read Depth'),
+        y=alt.Y('observed_features:Q', title='# Observed Features'),
+        color=alt.Color('sample:N', legend=None)
+    ).properties(
+        title='Rarefaction Curves'
+    )
+    shaded_area = alt.Chart(pd.DataFrame({
+        'x_min': [0],
+        'x_max': [depth_threshold]
+    })).mark_rect(opacity=0.7, color='peachpuff').encode(
+        x='x_min:Q',
+        x2='x_max:Q'
+    )
+    vertical_lines = alt.Chart(depth_lines).mark_rule(strokeWidth=2).encode(
+        x='x:Q',
+        color=alt.Color('label:N', legend=alt.Legend(title="Thresholds")),
+        #tooltip=['label:N', 'x:Q'] 
+    )
+
+    final_chart = alt.layer(
+        shaded_area, chart, vertical_lines
+    ).resolve_scale(
+        x='shared',
+        color='independent'
+    ).properties(
+        title='Rarefaction Curves',
+        width=600,
+        height=400
+    )
+
+    text = [f'Knee point: {knee_point} (at the {percentile:.2f} percentile)',
+            f'Knee point -5%: {lower_value:.0f} (at the {lower_percentile:.2f} percentile)',
+            f'Knee point +5%: {upper_value:.0f} (at the {upper_percentile:.2f} percentile)',
+            f' ']
+          
+    if (knee_point > depth_threshold):
+        text.append(f"The knee point is above the specified, acceptable depth range!")
+        text.append(f"The upper bound of the acceptable range is {depth_threshold}.")
+        text.append(f" ")
+        text.append(f"If the calculated knee point is used, {percentile:.2f}% of the samples will")
+        text.append(f" be excluded because they have too little reads.")
+        
+    text_l = pd.DataFrame({'text': ['\n'.join(text)]})
+    text_lines = alt.Chart(text_l).mark_text(size=12, align='left', baseline='top',lineBreak="\n", dx=-70).encode(text='text:N').properties(width=100, height=300)
+    upper_chart = alt.hconcat(final_chart, text_lines) 
+    #final_chart.save('rarefaction_curves.html')
+
+    #boxplot of reads_per_sample
+    reads_per_sample_df = reads_per_sample.reset_index()
+    reads_per_sample_df.columns = ['sample', 'reads_per_sample']
+
+    slider = alt.binding_range(min=0, max=reads_per_sample_df['reads_per_sample'].max(), step=100, name='Rarefaction_Depth')
+    slider_param = alt.param(name='SliderName', value=0, bind=slider)
+    predicate = alt.datum.reads_per_sample >= slider_param
+  
+    zoom = alt.selection_interval(bind='scales')
+    boxplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
+        x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=30), title='Reads per Sample'),  #'reads_per_sample:Q', bin=alt.Bin(maxbins=30)
+        y=alt.Y('count()', title='# Samples'),
+        color=alt.when(predicate).then(alt.value('steelblue')).otherwise(alt.value('lightgrey')), 
+    ).add_params(
+        slider_param,
+        zoom
+    ).properties(
+        title='Histogram of Reads per Sample',
+        width=500,
+        height=350
+    )
+    
+
+    #boxplot.save('boxplot_reads_per_sample.html')
+    combined_chart = alt.vconcat(upper_chart, boxplot).properties(spacing=60)
+    combined_chart.save('combined_chart.html')
 
     #end measuring runtime & memory usage
     current, peak = tracemalloc.get_traced_memory()
@@ -194,14 +281,37 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     print(f"Current memory usage: {current / 10**6:.4f} MB")
     print(f"Peak memory usage: {peak / 10**6:.4f} MB")
 
+    # copied from https://github.com/bokulich-lab/q2-moshpit/blob/ea8cb818462a098651169f2c884b9005f76d75fe/q2_moshpit/busco/busco.py
+    #do I need this??
+    # Render
+    """vega_json = json.dumps(context)
+    vega_json_summary = json.dumps(
+        _draw_marker_summary_histograms(busco_results)
+    )
+    table_json = _get_feature_table(busco_results)
+    stats_json = _calculate_summary_stats(busco_results)
+    tabbed_context.update({
+        "tabs": [
+            {"title": "QC overview", "url": "index.html"},
+            {"title": tab_title[0], "url": "detailed_view.html"},
+            {"title": tab_title[1], "url": "table.html"}
+        ],
+        "vega_json": vega_json,
+        "vega_summary_json": vega_json_summary,
+        "table": table_json,
+        "summary_stats_json": stats_json,
+        "page_size": 100
+    })
+    q2templates.render(templates, output_dir, context=tabbed_context)"""
+
     
 
 #to test & get outputs -> delete in the end
-#feature_table_path = "../../table.qza"
+feature_table_path = "../../table.qza"
 #other feature tables
 #feature_table_path = "../../atacama_soil_table.qza"
 #feature_table_path = "../../parkinson_mouse_dada2_table.qza"
 #very big one
-feature_table_path = "../../feature-table.qza"
+#feature_table_path = "../../feature-table.qza"
 ft_artifact = qiime2.Artifact.load(feature_table_path)
 automated_rarefaction_depth("../../", ft_artifact)

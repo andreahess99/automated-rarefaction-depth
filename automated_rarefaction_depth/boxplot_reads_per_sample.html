@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    #vis.vega-embed {
+      width: 100%;
+      display: flex;
+    }
+
+    #vis.vega-embed details,
+    #vis.vega-embed details summary {
+      position: relative;
+    }
+  </style>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vega-lite@5.20.1"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+</head>
+<body>
+  <div id="vis"></div>
+  <script>
+    (function(vegaEmbed) {
+      var spec = {"config": {"view": {"continuousWidth": 300, "continuousHeight": 300}}, "data": {"name": "data-c8d3136937260f083ef0163cc2321b13"}, "mark": {"type": "bar"}, "encoding": {"color": {"condition": {"test": "(datum.reads_per_sample <= filter_by_reads_per_sample)", "value": "steelblue"}, "value": "lightgrey"}, "x": {"bin": {"maxbins": 20}, "field": "reads_per_sample", "title": "Reads per Sample (Binned)", "type": "quantitative"}, "y": {"aggregate": "count", "title": "Number of Samples", "type": "quantitative"}}, "params": [{"name": "filter_by_reads_per_sample", "bind": {"input": "range", "max": 6770.0, "min": 514.0, "step": 100}, "value": 6770.0}], "title": "Histogram of Reads per Sample", "$schema": "https://vega.github.io/schema/vega-lite/v5.20.1.json", "datasets": {"data-c8d3136937260f083ef0163cc2321b13": [{"sample": "L6S93", "reads_per_sample": 5261.0}, {"sample": "L2S222", "reads_per_sample": 1603.0}, {"sample": "L5S104", "reads_per_sample": 1719.0}, {"sample": "L5S203", "reads_per_sample": 1561.0}, {"sample": "L5S155", "reads_per_sample": 1347.0}, {"sample": "L3S360", "reads_per_sample": 514.0}, {"sample": "L1S105", "reads_per_sample": 5020.0}, {"sample": "L2S309", "reads_per_sample": 895.0}, {"sample": "L2S175", "reads_per_sample": 2955.0}, {"sample": "L1S140", "reads_per_sample": 4749.0}, {"sample": "L1S76", "reads_per_sample": 5037.0}, {"sample": "L2S155", "reads_per_sample": 2579.0}, {"sample": "L6S68", "reads_per_sample": 4583.0}, {"sample": "L5S222", "reads_per_sample": 1973.0}, {"sample": "L4S63", "reads_per_sample": 5913.0}, {"sample": "L3S294", "reads_per_sample": 800.0}, {"sample": "L2S240", "reads_per_sample": 3535.0}, {"sample": "L1S257", "reads_per_sample": 3949.0}, {"sample": "L3S313", "reads_per_sample": 741.0}, {"sample": "L1S57", "reads_per_sample": 5525.0}, {"sample": "L1S208", "reads_per_sample": 5138.0}, {"sample": "L4S137", "reads_per_sample": 6770.0}, {"sample": "L4S112", "reads_per_sample": 5524.0}, {"sample": "L5S174", "reads_per_sample": 1429.0}, {"sample": "L3S341", "reads_per_sample": 653.0}, {"sample": "L1S8", "reads_per_sample": 4734.0}, {"sample": "L3S378", "reads_per_sample": 850.0}, {"sample": "L3S242", "reads_per_sample": 660.0}, {"sample": "L2S204", "reads_per_sample": 1969.0}, {"sample": "L5S240", "reads_per_sample": 1329.0}, {"sample": "L6S20", "reads_per_sample": 5171.0}, {"sample": "L2S382", "reads_per_sample": 2583.0}, {"sample": "L2S357", "reads_per_sample": 1533.0}, {"sample": "L1S281", "reads_per_sample": 3955.0}]}};
+      var embedOpt = {"mode": "vega-lite"};
+
+      function showError(el, error){
+          el.innerHTML = ('<div style="color:red;">'
+                          + '<p>JavaScript Error: ' + error.message + '</p>'
+                          + "<p>This usually means there's a typo in your chart specification. "
+                          + "See the javascript console for the full traceback.</p>"
+                          + '</div>');
+          throw error;
+      }
+      const el = document.getElementById('vis');
+      vegaEmbed("#vis", spec, embedOpt)
+        .catch(error => showError(el, error));
+    })(vegaEmbed);
+
+  </script>
+</body>
+</html>
