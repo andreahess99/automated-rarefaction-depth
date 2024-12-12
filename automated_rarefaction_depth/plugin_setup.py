@@ -33,30 +33,43 @@ plugin = Plugin(
     citations=[citations['Caporaso-Bolyen-2024']]
 )
  
+plugin.visualizers.register_function(
+    function=automated_rarefaction_depth.rarefy,
+    inputs={'counts': FeatureTable[Frequency]}, #might be something different: technically 1 row of the feature table df
+    parameters={'depth': Int % Range(1, None),
+                'iteration': Int % Range(1, None),
+                'seed': Int % Range(1, None)},
+    input_descriptions={
+        'counts': ('The feature table containing the sample to rarefy.')
+    },
+    parameter_descriptions={
+        'depth': 'The depth to rarefy to.',
+        'iteration': 'The number of iteration, how many times this specific sample has been rarified before.',
+        'seed': 'The seed used for random number generation.'
+    },
+    name='Rarefy',
+    description=("Rarefy a feature table to a specified depth."),
+)
+
 
 plugin.visualizers.register_function(
     function=automated_rarefaction_depth.rarefaction_depth,
-    inputs={'table': FeatureTable[Frequency], 'phylogeny': Phylogeny[Rooted]},
-    parameters={'metadata': Metadata,
-                'seed': Int % Range(1, None),
-                'p_samples': Float % Range(0, 1),
-                'iterations': Int % Range(1, None),
+    inputs={'table': FeatureTable[Frequency]},
+    parameters={'seed': Int % Range(1, None),
+                'percent_samples': Float % Range(0, 1),
+                'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
-                'steps': Int % Range(1, 100),
+                'steps': Int % Range(5, 100),
                 'algorithm': ["kneedle", "gradient"]},
     input_descriptions={
-        'table': ('Feature table to compute rarefaction curves from.'),
-        'phylogeny': ('Optional phylogeny for phylogenetic metrics.')
+        'table': ('Feature table to compute rarefaction curves from.')
     },
     parameter_descriptions={
-        'metadata': 'The sample metadata.',
         'seed': 'The seed used for random number generation.',
-        'p_samples': 'The lower bound of the percentage of your samples want to keep.',
-        'iterations': 'The number of rarefied feature tables to '
-                       'compute at each step.',
-                       'metadata': 'The sample metadata.',
-        'table_size': 'The number of samples to keep in the feature table.',
-        'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth.',
+        'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
+        'iterations': 'The number of times each sample gets rarefied at each depth, a positive number below 100.',
+        'table_size': 'The number of samples to keep in the feature table, a positive number.',
+        'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',
         'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.'
     },
     name='Automated Rarefaction Depth',

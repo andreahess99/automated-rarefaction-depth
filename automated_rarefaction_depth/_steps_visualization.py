@@ -65,13 +65,7 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
                                 metadata: qiime2.Metadata = None, iterations: int = 10, table_size: int = None,
                                 steps: int = 20, p_samples: float = 0.8, algorithm: str = 'kneedle') -> None:
     
-    #check which algo is selected and run appropriate one -> to be implemented!!
-
-    # Measure runtime & memory usage
-    start_time = time.time()
-    tracemalloc.start() 
-    # Get the current process & start cpu measurement
-    #process = psutil.Process(os.getpid())
+  
     
     min_depth = 1
     table_df = table.view(pd.DataFrame)
@@ -94,43 +88,33 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
         table_df = table_df.sample(n=table_size, random_state=seed) #randomly select rows, set random_state for reproducibility
         table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] #remove columns where all values are either 0 or NaN
 
-    """if (len(table_df) > 100):
-        #delete the top 5 and bottom 5 samples
-        table_df['row_sum'] = table_df.sum(axis=1)
-        df_sorted = table_df.sort_values(by='row_sum')
-        df_filtered = df_sorted.iloc[5:-5]
-        df_filtered = df_filtered.drop(columns='row_sum')
-        table_df = df_filtered
-        print("truncated")"""
 
     num_samples = len(table_df)
     #calculate the max reads that were used
     reads_per_sample = table_df.sum(axis=1) 
     max_depth =  int(reads_per_sample.max())
     sorted_depths = reads_per_sample.sort_values()
-    #print("sorted depths:", sorted_depths)
-
-    # calculate the index for the p_sample loss (as an integer)
+    
     sample_loss_index = int(np.ceil((1-p_samples) * len(sorted_depths))) - 1 #len(sorted_depths)=number of samples
 
     # get the sequencing depth at the sample loss index (p_samples of all samples will have fewer reads)
     # 1 - depth_threshold is the range of possible & valid values for the knee
     depth_threshold = int(sorted_depths.iloc[sample_loss_index])
-    #print("depth threshold:", depth_threshold)
-  
+    
 
     #go through every sample and calculate the observed features for each depth
     knee_points = [None] * num_samples
     s = 0
     plt.figure(figsize=(8, 6))
-    
-    for sample in table_df.index:
-        max_range = np.linspace(min_depth, reads_per_sample.loc[sample], num=steps, dtype=int)
+    sample = table_df.index[17] #numbers used for table: 5, 17, 15, 35, 58
+    depths = [100, 75, 50, 20, 16, 8, 4, 2]
+    for num in depths:
+        max_range = np.linspace(min_depth, reads_per_sample.loc[sample], num=num, dtype=int)
         #array to store the observed features for each depth, rows: iterations, columns: depths
         #the different iterations are used to calculate the average of the observed features for each depth & have statistical validity
-        array_sample = np.empty((iterations, steps))
+        array_sample = np.empty((iterations, num))
 
-        for i in range(steps):
+        for i in range(num):
             for j in range(iterations):
                 rarefied_sample = rarefy(table_df.loc[sample].values, max_range[i], j, seed)
                 c = np.count_nonzero(rarefied_sample)
@@ -139,50 +123,37 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
         array_sample_avg = np.mean(array_sample, axis=0)
         #array_sample_median = np.median(array_sample, axis=0)
 
-        if (s < 50 and s > 10): #plot only the first 5 samples
-            plt.plot(max_range, array_sample_avg, marker='o', linestyle='-', label=sample)
+        #if (s < 50 and s > 10): #plot only the first 5 samples
+        plt.plot(max_range, array_sample_avg, marker='o', linestyle='-', label=f'{num} steps')
         
         # Use KneeLocator to find the knee point (depth where total abundance starts leveling off)
         kneedle = KneeLocator(max_range, array_sample_avg, curve="concave", direction="increasing")
         # Store the knee point 
         knee_points[s] = kneedle.knee
         s += 1
-        if(s % 100 == 0):
-            print("Processed", s, "samples.")
+       
 
-
-    #calculate the average of all knee points
-    #print("knee points:", knee_points)
-    # Filter out None values
     knee_points_filtered = [point for point in knee_points if point is not None]
     knee_point_avg = round(np.mean(knee_points_filtered))
-    knee_point_median = round(np.median(knee_points_filtered))
 
-    #print("array sample: ", array_sample)
     #just for visualizations of a single sample during development -> delete later!!
-    plt.axvspan(0, depth_threshold, color='peachpuff', alpha=0.75, label='Acceptable Range')
-    plt.axvline(x=knee_point_avg, color='red', linestyle='--', label='Vertical Line at Knee Point (avg)')
-    plt.axvline(x=knee_point_median, color='black', linestyle='--', label='Vertical Line at Knee Point (median)')
     plt.xlabel('Sequencing Depth')
-    plt.ylabel('Observed Features')
+    plt.ylabel('# Observed Features')
     plt.title('Rarefaction Curve')
     plt.legend()
-    plt.savefig('example_curve_no_range.png')
+    plt.savefig('example_different_numbers_steps.png')
     
-    print("knee point avg:", knee_point_avg)
-    print("knee point median:", knee_point_median)
+    print("sample:", sample)
+    print("knee points:", knee_points)
+   
     
 
-    knee_point = knee_point_avg
-    #checking if the knee point is in the range of acceptable values
-    if (knee_point_avg > depth_threshold):
-        print("The knee point is above the depth threshold.")
-        knee_point = depth_threshold
-
+    #knee_point = knee_point_avg
+    
 
     #finding +-5% points
     #finding out what percentile my knee point is at
-    index = np.searchsorted(sorted_depths, knee_point)
+    """index = np.searchsorted(sorted_depths, knee_point)
     percentile = (index / len(sorted_depths)) * 100
 
     #calculate the +-5% percentiles & ensuring it won't be out of bounds
@@ -201,20 +172,9 @@ def automated_rarefaction_depth(outpur_dir: str, table: biom.Table, phylogeny: N
     print(f"The target value {knee_point_avg} is at the {perc_avg:.2f}% percentile.")
     print(f"The target value {knee_point} is at the {percentile:.2f}% percentile.")
     print(f"The value at {max(percentile-5, 0):.2f}% is approximately {lower_value}.")
-    print(f"The value at {percentile+5:.2f}% is approximately {upper_value}.")
+    print(f"The value at {percentile+5:.2f}% is approximately {upper_value}.")"""
 
-    #end measuring runtime & memory usage
-    current, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    end_time = time.time()
-    # Measure CPU usage and runtime
-    #cpu_usage = process.cpu_percent(interval=3)  # CPU usage since the last call
-
-    # Report CPU usage
-    #print(f"CPU Usage: {cpu_usage}%")
-    print(f"Runtime: {end_time - start_time:.4f} seconds")
-    print(f"Current memory usage: {current / 10**6:.4f} MB")
-    print(f"Peak memory usage: {peak / 10**6:.4f} MB")
+    
 
     
 
