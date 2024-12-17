@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import qiime2
 import q2templates
+import tempfile
 import biom
 import itertools
 from qiime2 import Artifact
@@ -301,8 +302,9 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
     )
         
     combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60)
-    #combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60)
+    #combined_chart.save('combined_chart.html')
     combined_chart.save('combined_chart.html')
+
 
 
     #end measuring runtime & memory usage
@@ -317,19 +319,18 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
     # copied from https://github.com/bokulich-lab/q2-moshpit/blob/ea8cb818462a098651169f2c884b9005f76d75fe/q2_moshpit/busco/busco.py
     #do I need this??
     # Render
-    """vega_json = json.dumps(context)
-    vega_json_summary = json.dumps(
-        _draw_marker_summary_histograms(busco_results)
-    )
-    
+    tabbed_context = {}
+    #vega_json = json.dumps(combined_chart.to_dict())
+    vega_json = combined_chart.to_json()
+    temp_dir = tempfile.TemporaryDirectory()
+    output_dir = os.path.join(temp_dir.name, "rarefaction-depth")
     tabbed_context.update({
+        "tabs":[{"title": "Rarefaction Depth Overview", "url": "index.html"}],
         "vega_json": vega_json,
-        "vega_summary_json": vega_json_summary,
-        "table": table_json,
-        "summary_stats_json": stats_json,
         "page_size": 100
     })
-    q2templates.render(templates, output_dir, context=tabbed_context)"""
+    templates = os.path.join(os.path.dirname(__file__), 'assets')
+    q2templates.render(templates, output_dir, context=tabbed_context)
 
     
 
