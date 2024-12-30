@@ -22,14 +22,18 @@ and https://github.com/bokulich-lab/q2-moshpit/blob/main/q2_moshpit/assets/busco
   <div class="row">
     <div class="col-lg-12">
         <div class="card">
-            <div class="card-header">Automated Rarefaction Depth Summary</h5>
+            <h5 class="card-header">Automated Rarefaction Depth Summary</h5>
             <div class="card-body">
                 <p>
                     The following plot on the left shows the number of observed features at each depth for
                     every sample as a curve. The shaded area represents the specified acceptable
                     range of rarefaction depths. <!--fix/adjust this text!!-->
                 </p>
-      <iframe src="combined_chart.html" style="width:100%; height:1500px; border:none;" id="iCharts"></iframe>
+                <div class="col-lg-12" id="summaryHistogramsMarkers">
+                    <div id="plotMarkers" style="margin-top: 5px"></div> <!--adjust name according to definition in js below!-->
+                </div>
+            </div>   
+        </div> 
     </div>
   </div>
 
@@ -40,3 +44,25 @@ and https://github.com/bokulich-lab/q2-moshpit/blob/main/q2_moshpit/assets/busco
 {% include 'js-error-handler.html' %}
 
 {% endblock %}
+
+
+<!--copied from busco -> adjust!-->
+<script type="text/javascript">
+    $(document).ready(function () {
+        // temporary hack to make it look good with Bootstrap 5
+        adjustTagsToBS3()
+
+        //adjust names elements etc (#plotMarkers, 'vega_summary_json')
+        const vegaSpecSummary = JSON.parse(document.getElementById('vega_summary_json').textContent);
+        vegaEmbed("#plotMarkers", vegaSpecSummary).then(
+            function (result) {
+                result.view.logLevel(vega.Warn);
+                window.v = result.view;
+            }
+        ).catch(
+            function (error) {
+                handleErrors([error], $("#plotMarkers"));
+            }
+        );
+    });
+</script>

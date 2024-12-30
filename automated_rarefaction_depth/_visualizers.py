@@ -52,7 +52,7 @@ def rarefy(counts, depth, iteration, seed):
 #my automated rarefaction depth function
 def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
                                 iterations: int = 10, table_size: int = None, steps: int = 20,
-                                percent_samples: float = 0.95, algorithm: str = 'kneedle') -> None:
+                                percent_samples: float = 0.8, algorithm: str = 'kneedle') -> None:
     
     # Measure runtime & memory usage
     start_time = time.time()
@@ -325,11 +325,13 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
     temp_dir = tempfile.TemporaryDirectory()
     output_dir = os.path.join(temp_dir.name, "rarefaction-depth")
     tabbed_context.update({
-        "tabs":[{"title": "Rarefaction Depth Overview", "url": "index.html"}],
-        "vega_json": vega_json,
-        "page_size": 100
+        "vega_json": vega_json
     })
-    templates = os.path.join(os.path.dirname(__file__), 'assets')
+    TEMPLATES = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "assets"
+    )
+    templates = [os.path.join(TEMPLATES, "index.html")]
     q2templates.render(templates, output_dir, context=tabbed_context)
 
     
