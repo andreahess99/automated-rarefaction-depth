@@ -13,7 +13,6 @@ import shutil
 from urllib.parse import quote
 import functools
 import matplotlib.pyplot as plt
-
 import scipy
 import numpy as np
 import pandas as pd
@@ -23,8 +22,6 @@ import tempfile
 import biom
 import itertools
 from qiime2 import Artifact
-
-
 from kneed import KneeLocator
 import altair as alt
 import time
@@ -78,8 +75,6 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
         raise ValueError("The feature table contains non-numerical values.")
     
     
-    
-
     #table_size = 200
     #adjusting table size if it's too big -> keep table_size rows
     if (table_size is not None and len(table_df) > table_size):
@@ -262,7 +257,6 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
     text_l = pd.DataFrame({'text': ['\n'.join(text)]})
     text_lines = alt.Chart(text_l).mark_text(size=14, align='left', baseline='top', lineBreak="\n", dx=-50).encode(text='text:N').properties(width=100, height=50)#(width=100, height=300)
     upper_chart = alt.vconcat(final_with_line, text_lines).properties(spacing=0)
-    #final_chart.save('rarefaction_curves.html')
 
 
     #barplot of reads_per_sample
@@ -302,9 +296,7 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
     )
         
     combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60)
-    #combined_chart.save('combined_chart.html')
-    combined_chart.save('combined_chart.html')
-
+    combined_chart.save('assets/combined_chart.html', inline=True)
 
 
     #end measuring runtime & memory usage
@@ -317,22 +309,31 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
     print(f"Peak memory usage: {peak / 10**6:.4f} MB")
 
     # copied from https://github.com/bokulich-lab/q2-moshpit/blob/ea8cb818462a098651169f2c884b9005f76d75fe/q2_moshpit/busco/busco.py
-    #do I need this??
     # Render
     tabbed_context = {}
     #vega_json = json.dumps(combined_chart.to_dict())
     vega_json = combined_chart.to_json()
     temp_dir = tempfile.TemporaryDirectory()
-    output_dir = os.path.join(temp_dir.name, "rarefaction-depth")
+    output_dir = os.path.join('assets', "rarefaction-depth")
+    os.makedirs(output_dir, exist_ok=True)
+    
     tabbed_context.update({
         "vega_json": vega_json
     })
-    TEMPLATES = os.path.join(
+    """TEMPLATES = os.path.join(
         os.path.dirname(os.path.dirname(__file__)),
         "assets"
     )
-    templates = [os.path.join(TEMPLATES, "index.html")]
+    templates = [os.path.join(TEMPLATES, "index.html")]"""
+    templates = os.path.join('assets', 'index.html')
+
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)  # Remove existing directory to avoid conflicts
+    os.makedirs(output_dir, exist_ok=True)
+    
+
     q2templates.render(templates, output_dir, context=tabbed_context)
+    
 
     
 
