@@ -27,6 +27,7 @@ import altair as alt
 import time
 import psutil
 import tracemalloc
+from shutil import copytree
 
 
 
@@ -47,7 +48,7 @@ def rarefy(counts, depth, iteration, seed):
 
 
 #my automated rarefaction depth function
-def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
+def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
                                 iterations: int = 10, table_size: int = None, steps: int = 20,
                                 percent_samples: float = 0.8, algorithm: str = 'kneedle') -> None:
     
@@ -56,7 +57,8 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
     tracemalloc.start()
     
     min_depth = 1
-    table_df = table.view(pd.DataFrame)
+    #table_df = table.view(pd.DataFrame)
+    table_df = table
 
     #for filtering the cancer microbiome dataset to a smaller size
     """alt_table = table_df.sum(axis=1).sort_values().iloc[1000:8000]
@@ -96,7 +98,6 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
     #go through every sample and calculate the observed features for each depth
     knee_points = [None] * num_samples
     s = 0
-    #plt.figure(figsize=(8, 6))
     df_list = []
     
     for sample in table_df.index:
@@ -136,21 +137,7 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
     # Filter out None values
     knee_points_filtered = [point for point in knee_points if point is not None]
     #calculate the average of all knee points
-    knee_point_avg = round(np.mean(knee_points_filtered))
-    knee_point_median = round(np.median(knee_points_filtered))
-    
-    #just for visualizations during development -> delete later!!
-    """plt.axvspan(0, depth_threshold, color='peachpuff', alpha=0.75, label='Acceptable Range')
-    plt.axvline(x=knee_point_avg, color='red', linestyle='--', label='Vertical Line at Knee Point (avg)')
-    plt.axvline(x=knee_point_median, color='black', linestyle='--', label='Vertical Line at Knee Point (median)')
-    plt.xlabel('Sequencing Depth')
-    plt.ylabel('Observed Features')
-    plt.title('Rarefaction Curve')
-    plt.legend()
-    plt.savefig('example_curve_visualizations.png')"""
-
-
-    knee_point = knee_point_avg
+    knee_point = round(np.mean(knee_points_filtered))
 
     #finding +-5% points
     #finding out what percentile my knee point is at
@@ -219,7 +206,7 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
         color='independent'
     ).properties(
         title='Rarefaction Curves',
-        width=500,
+        width=450,
         height=350
     )
     
@@ -233,7 +220,7 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
         param_checkbox
     ).properties(
         title='Interactive Vertical Line',
-        width=500, #600
+        width=450, #600
         height=350 #400
     )
     
@@ -275,7 +262,7 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
         position='position'
     ).properties(
         title='Histogram of Reads per Sample',
-        width=500,
+        width=450,
         height=350
     )
 
@@ -287,7 +274,7 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
         zoom
     ).properties(
         title='Histogram of Reads per Sample',
-        width=500,
+        width=450,
         height=350
     )
     barplot_combined = alt.layer(background, barplot).resolve_scale(
@@ -296,7 +283,26 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
     )
         
     combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60)
-    combined_chart.save('assets/combined_chart.html', inline=True)
+    
+
+    combined_chart = combined_chart.configure(
+        font='Sans-Serif'
+    ).configure_title(
+        font='Sans-Serif',
+        fontSize=14  
+    ).configure_axis(
+        labelFont='Sans-Serif',
+        titleFont='Sans-Serif',
+        labelFontSize=12,  
+        titleFontSize=14   
+    ).configure_legend(
+        labelFont='Sans-Serif',
+        titleFont='Sans-Serif',
+        labelFontSize=12,  
+        titleFontSize=14   
+    )
+
+    combined_chart.save(os.path.join(output_dir, 'combined_chart.html'), inline=True)
 
 
     #end measuring runtime & memory usage
@@ -309,40 +315,36 @@ def rarefaction_depth(outpur_dir: str, table: biom.Table, seed: int = 42,
     print(f"Peak memory usage: {peak / 10**6:.4f} MB")
 
     # copied from https://github.com/bokulich-lab/q2-moshpit/blob/ea8cb818462a098651169f2c884b9005f76d75fe/q2_moshpit/busco/busco.py
-    # Render
+    
     tabbed_context = {}
-    #vega_json = json.dumps(combined_chart.to_dict())
     vega_json = combined_chart.to_json()
-    temp_dir = tempfile.TemporaryDirectory()
-    output_dir = os.path.join('assets', "rarefaction-depth")
-    os.makedirs(output_dir, exist_ok=True)
+    TEMPLATES = os.path.join(
+        os.path.dirname(__file__),
+        "assets"
+    )
     
     tabbed_context.update({
         "vega_json": vega_json
     })
-    """TEMPLATES = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        "assets"
+    templates = os.path.join(TEMPLATES, 'index.html')
+    copytree(
+        src=TEMPLATES,
+        dst=output_dir,
+        dirs_exist_ok=True
     )
-    templates = [os.path.join(TEMPLATES, "index.html")]"""
-    templates = os.path.join('assets', 'index.html')
 
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)  # Remove existing directory to avoid conflicts
-    os.makedirs(output_dir, exist_ok=True)
     
-
     q2templates.render(templates, output_dir, context=tabbed_context)
     
 
-    
+
 
 #to test & get outputs -> delete in the end
-feature_table_path = "../../table.qza"
+#feature_table_path = "../../table.qza"
 #other feature tables
 #feature_table_path = "../../atacama_soil_table.qza"
 #feature_table_path = "../../parkinson_mouse_dada2_table.qza"
 #very big one
 #feature_table_path = "../../feature-table.qza"
-ft_artifact = qiime2.Artifact.load(feature_table_path)
-rarefaction_depth("../../", ft_artifact)
+#ft_artifact = qiime2.Artifact.load(feature_table_path)
+#rarefaction_depth("../../", ft_artifact)

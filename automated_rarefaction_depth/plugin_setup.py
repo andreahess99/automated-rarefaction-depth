@@ -15,7 +15,6 @@ from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.sample_data import AlphaDiversity, SampleData
 from q2_types.tree import Phylogeny, Rooted
 from automated_rarefaction_depth import __version__
-#from automated_rarefaction_depth._methods import duplicate_table
 
 
 citations = Citations.load("citations.bib", package="automated_rarefaction_depth")
@@ -23,7 +22,7 @@ citations = Citations.load("citations.bib", package="automated_rarefaction_depth
 plugin = Plugin(
     name="rarefaction-depth",
     version=automated_rarefaction_depth.__version__,
-    #website="https://example.com",
+    website="https://example.com",
     package="automated_rarefaction_depth",
     description="This qiime2 plugin gives you a tool to automatically calculate the ideal rarefaction depth based on the given data and some user parameters.",
     short_description="A tool that automatically calculates the ideal rarefaction depth.",
@@ -33,23 +32,6 @@ plugin = Plugin(
     citations=[citations['Caporaso-Bolyen-2024']]
 )
  
-plugin.visualizers.register_function(
-    function=automated_rarefaction_depth.rarefy,
-    inputs={'counts': FeatureTable[Frequency]}, #might be something different: technically 1 row of the feature table df
-    parameters={'depth': Int % Range(1, None),
-                'iteration': Int % Range(1, None),
-                'seed': Int % Range(1, None)},
-    input_descriptions={
-        'counts': ('The feature table containing the sample to rarefy.')
-    },
-    parameter_descriptions={
-        'depth': 'The depth to rarefy to.',
-        'iteration': 'The number of iteration, how many times this specific sample has been rarified before.',
-        'seed': 'The seed used for random number generation.'
-    },
-    name='Rarefy',
-    description=("Rarefy a feature table to a specified depth."),
-)
 
 
 plugin.visualizers.register_function(
@@ -60,7 +42,7 @@ plugin.visualizers.register_function(
                 'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
                 'steps': Int % Range(5, 100),
-                'algorithm': ["kneedle", "gradient"]},
+                'algorithm': Str % Choices("kneedle", "gradient")},
     input_descriptions={
         'table': ('Feature table to compute rarefaction curves from.')
     },
@@ -75,7 +57,5 @@ plugin.visualizers.register_function(
     name='Automated Rarefaction Depth',
     description=("Automatically computes an optimal rarefaction depth."),
     citations=[citations['Caporaso-Bolyen-2024']],
-    #examples={'alpha_group_significance_faith_pd':
-    #          ex.alpha_group_significance_faith_pd}
 )
 

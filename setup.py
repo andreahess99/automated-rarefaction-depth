@@ -29,7 +29,7 @@ setup(
             ".plugin_setup:plugin"]
     },
     package_data={
-        "automated_rarefaction_depth": ["citations.bib"],
+        "automated_rarefaction_depth": ["citations.bib", "assets/*", "assets/js/*", "assets/css/*"],
         "automated_rarefaction_depth.tests": ["data/*"],
     },
     zip_safe=False,

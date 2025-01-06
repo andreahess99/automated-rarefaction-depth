@@ -8,9 +8,11 @@
 # ----------------------------------------------------------------------------
 
 from ._version import get_versions
+from ._visualizers import rarefaction_depth
+
+__all__ = ['rarefaction_depth']
 
 __version__ = get_versions()["version"]
 del get_versions
 
-from . import _version
-__version__ = _version.get_versions()['version']
+
