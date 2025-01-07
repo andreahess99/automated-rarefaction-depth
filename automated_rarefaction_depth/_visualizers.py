@@ -31,7 +31,6 @@ from shutil import copytree
 
 
 
-#helper function
 def rarefy(counts, depth, iteration, seed):
     if sum(counts) < depth:
         raise ValueError(f"Sample has fewer reads ({sum(counts)}) than the rarefaction depth ({depth}).")
@@ -39,15 +38,13 @@ def rarefy(counts, depth, iteration, seed):
     # Generate the rarefied sample by randomly subsampling without replacement
     np.random.seed(iteration+seed)
     counts = counts.astype(int)
-    reads = np.repeat(np.arange(len(counts)), counts)  # Create a list of read indices based on counts
-    subsampled_reads = np.random.choice(reads, size=depth, replace=False)  # Subsample without replacement
-    rarefied_counts = np.bincount(subsampled_reads, minlength=len(counts))  # Count how many times each species was selected
+    reads = np.repeat(np.arange(len(counts)), counts)  
+    subsampled_reads = np.random.choice(reads, size=depth, replace=False)  
+    rarefied_counts = np.bincount(subsampled_reads, minlength=len(counts)) 
     
     return rarefied_counts
 
 
-
-#my automated rarefaction depth function
 def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
                                 iterations: int = 10, table_size: int = None, steps: int = 20,
                                 percent_samples: float = 0.8, algorithm: str = 'kneedle') -> None:
@@ -169,7 +166,9 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
 
     zoom = alt.selection_interval(bind='scales')
 
-    param_checkbox = alt.param(bind=alt.binding_checkbox(name='Show depth specified by slider as a line on the plot: '))
+    param_checkbox = alt.param(
+        bind=alt.binding_checkbox(name='Show depth specified by slider as a line on the plot: ')
+    )
 
     s = alt.param(
         name='position', bind=alt.binding_range(min=0, max=max_reads, step=50, name='Rarefaction Depth Line'), value=knee_point
@@ -178,13 +177,14 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
     chart = alt.Chart(combined_df).mark_line(point=True).encode(
         x=alt.X('depth:Q', title='Read Depth'),
         y=alt.Y('observed_features:Q', title='# Observed Features'),
-        color=alt.Color('sample:N', legend=None).scale(scheme='category10') #remove .scale(..) if I want the og colors
+        color=alt.Color('sample:N', legend=None).scale(scheme='category10') #remove .scale(..) if I want the og colors 
     ).add_params(
         zoom,
         param_checkbox
     ).properties(
         title='Rarefaction Curves'
     )
+
     shaded_area = alt.Chart(pd.DataFrame({
         'x_min': [0],
         'x_max': [depth_threshold]
@@ -224,6 +224,7 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         height=350 #400
     )
     
+
     final_with_line = alt.layer(final_chart, vertical_line).resolve_scale( 
         x='shared',
         y='shared'
@@ -283,24 +284,6 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
     )
         
     combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60)
-    
-
-    combined_chart = combined_chart.configure(
-        font='Sans-Serif'
-    ).configure_title(
-        font='Sans-Serif',
-        fontSize=14  
-    ).configure_axis(
-        labelFont='Sans-Serif',
-        titleFont='Sans-Serif',
-        labelFontSize=12,  
-        titleFontSize=14   
-    ).configure_legend(
-        labelFont='Sans-Serif',
-        titleFont='Sans-Serif',
-        labelFontSize=12,  
-        titleFontSize=14   
-    )
 
     combined_chart.save(os.path.join(output_dir, 'combined_chart.html'), inline=True)
 

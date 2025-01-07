@@ -21,7 +21,7 @@ setup(
     author="Andrea Hess",
     author_email="andhess@ethz.ch",
     description=description,
-    url="https://example.com",
+    url=" https://github.com/andreahess99/automated-rarefaction-depth",
     entry_points={
         "qiime2.plugins": [
             "automated_rarefaction_depth="

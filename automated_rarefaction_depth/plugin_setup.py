@@ -22,14 +22,14 @@ citations = Citations.load("citations.bib", package="automated_rarefaction_depth
 plugin = Plugin(
     name="rarefaction-depth",
     version=automated_rarefaction_depth.__version__,
-    website="https://example.com",
+    website="https://github.com/andreahess99/automated-rarefaction-depth",
     package="automated_rarefaction_depth",
     description="This qiime2 plugin gives you a tool to automatically calculate the ideal rarefaction depth based on the given data and some user parameters.",
     short_description="A tool that automatically calculates the ideal rarefaction depth.",
     # The plugin-level citation of 'Caporaso-Bolyen-2024' is provided as
     # an example. You can replace this with citations to other references
     # in citations.bib.
-    citations=[citations['Caporaso-Bolyen-2024']]
+    citations=citations #[citations['Caporaso-Bolyen-2024']]
 )
  
 
@@ -56,6 +56,6 @@ plugin.visualizers.register_function(
     },
     name='Automated Rarefaction Depth',
     description=("Automatically computes an optimal rarefaction depth."),
-    citations=[citations['Caporaso-Bolyen-2024']],
+    citations=citations#[citations['Caporaso-Bolyen-2024']],
 )
 
