@@ -155,6 +155,41 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
 
 
     #plotting with altair
+    #registering the theme
+    def boots():
+        font = "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif"
+        return {
+        "config" : {
+             "title": {'font': font},
+             "axis": {
+                  "labelFont": font,
+                  "titleFont": font,
+                  "labelFontSize": 14,
+                  "titleFontSize": 13
+             },
+             "header": {
+                  "labelFont": font,
+                  "titleFont": font,
+                  "labelFontSize": 14,
+                  "titleFontSize": 13 
+             },
+             "legend": {
+                  "labelFont": font,
+                  "titleFont": font,
+                  #"labelfontSize": 26,
+                  "titleFontSize": 14
+             },
+             "text": {
+                  "font": font,
+                  "fontSize": 16
+             }
+        }
+    } 
+
+    # Register and enable the theme
+    alt.themes.register('boots', boots)
+    alt.themes.enable('boots')
+
     #plotting the rarefaction curves including the shaded area
     depth_lines = pd.DataFrame({
         'x': [lower_value, knee_point, upper_value],  # x-values for vertical lines
@@ -233,17 +268,20 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
     text = [f'Knee point: {knee_point} (at the {percentile:.2f} percentile)',
             f'Knee point -5%: {lower_value:.0f} (at the {lower_percentile:.2f} percentile)',
             f'Knee point +5%: {upper_value:.0f} (at the {upper_percentile:.2f} percentile)',
+            f'The shaded area is where at least {percent_samples * 100:.2f}% of the samples ',
+            f'are kept, if used as the rarefaction depth.',
             f' ']
           
     if (knee_point > depth_threshold):
+        ps = percent_samples * 100
         text.append(f"The knee point is above the specified, acceptable depth range!")
-        text.append(f"The upper bound of the acceptable range is {depth_threshold}.")
+        text.append(f"The upper bound of the acceptable range (keeping at least {ps:.2f}% of the samples) is {depth_threshold}.")
         text.append(f" ")
         text.append(f"If the calculated knee point is used, {percentile:.2f}% of the samples will")
         text.append(f" be excluded because they have too little reads.")
         
     text_l = pd.DataFrame({'text': ['\n'.join(text)]})
-    text_lines = alt.Chart(text_l).mark_text(size=14, align='left', baseline='top', lineBreak="\n", dx=-50).encode(text='text:N').properties(width=100, height=50)#(width=100, height=300)
+    text_lines = alt.Chart(text_l).mark_text(fontSize=16, size=14, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)#(width=100, height=300)
     upper_chart = alt.vconcat(final_with_line, text_lines).properties(spacing=0)
 
 
@@ -283,9 +321,16 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         y='shared'
     )
         
-    combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60)
-
-    combined_chart.save(os.path.join(output_dir, 'combined_chart.html'), inline=True)
+    combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60).configure_legend(
+        labelFontSize=14,  # Font size of the legend labels
+        titleFontSize=14   # Font size of the legend title
+    )
+    combined_chart.save('new_chart.png')
+    # Check if the file already exists and delete it if it does
+    new_chart_path = os.path.join(output_dir, 'new_chart.html')
+    if os.path.exists(new_chart_path):
+        os.remove(new_chart_path)
+    combined_chart.save(os.path.join(output_dir, 'new_chart.html'), inline=True)
 
 
     #end measuring runtime & memory usage

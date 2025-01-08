@@ -1,4 +1,4 @@
-<!--copied from https://github.com/bokulich-lab/q2-fastp/blob/main/q2_fastp/assets/index.html
+<!-- head copied from https://github.com/bokulich-lab/q2-fastp/blob/main/q2_fastp/assets/index.html
 and https://github.com/bokulich-lab/q2-moshpit/blob/main/q2_moshpit/assets/busco/feature_data/index.html-->
 
 {% extends 'base.html' %}
@@ -17,6 +17,31 @@ and https://github.com/bokulich-lab/q2-moshpit/blob/main/q2_moshpit/assets/busco
 <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
 
 <link crossorigin="anonymous" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" integrity="sha256-YvdLHPgkqJ8DVUxjjnGVlMMJtNimJ6dYkowFFvp4kKs=" rel="stylesheet"/>
+<!-- <style>
+    input[type="range"] {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif !important;
+      font-size: 12px;
+      color: #333;
+      background-color: #f5f5f5;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 2px 5px;
+    }
+    .vega-bind-name {
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif !important;
+        font-size: 14px;
+        font-weight: bold;
+        color: #333;
+        margin-right: 10px; /* Space between label and checkbox */
+    }
+    input[type="checkbox"] {
+        width: 18px; /* Adjust size */
+        height: 18px; /* Adjust size */
+        accent-color: #007bff; /* Modern browsers support accent-color for the checkbox */
+        cursor: pointer; /* Change cursor to pointer on hover */
+    }
+  </style> -->
+  
 
 {% endblock %}
 
@@ -55,7 +80,7 @@ and https://github.com/bokulich-lab/q2-moshpit/blob/main/q2_moshpit/assets/busco
                     ATTENTION! The default acceptable range of rarefaction depths is set to keeping at least 80% of all samples. 
                 </p>
                 <div class="col-lg-12" id="combinedChartContainer"> 
-                     <iframe src="./combined_chart.html" width="100%" height="600"></iframe>
+                     <iframe src="./new_chart.html" width="100%" height="700" scrolling="no" frameborder="0"></iframe>
                 </div>
             </div>   
         </div> 
@@ -67,5 +92,36 @@ and https://github.com/bokulich-lab/q2-moshpit/blob/main/q2_moshpit/assets/busco
 {% block footer %}
 {% set loading_selector = '#loading' %}
 {% include 'js-error-handler.html' %}
+
+<!-- <script>
+  // Apply styles for checkbox label and checkbox itself after the page loads
+  document.addEventListener('DOMContentLoaded', function() {
+    // Apply font styles directly to the checkbox label
+    const label = document.querySelector('.vega-bind-name');
+    if (label) {
+      label.style.fontFamily = "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif !important";
+      label.style.fontSize = "14px !important";
+      label.style.fontWeight = "bold !important";
+      label.style.color = "#333 !important";
+    }
+
+    // Apply styles to the checkbox itself
+    const checkbox = document.querySelector('input[type="checkbox"]');
+    if (checkbox) {
+      checkbox.style.width = '18px !important';
+      checkbox.style.height = '18px !important';
+      checkbox.style.accentColor = '#007bff !important';
+      checkbox.style.cursor = 'pointer !important';
+      
+      // Hover effect for the checkbox (using JavaScript as a fallback)
+      checkbox.addEventListener('mouseover', function() {
+        checkbox.style.boxShadow = '0 0 5px rgba(0, 123, 255, 0.5) !important';
+      });
+      checkbox.addEventListener('mouseout', function() {
+        checkbox.style.boxShadow = 'none !important';
+      });
+    }
+  });
+</script> -->
 
 {% endblock %}
