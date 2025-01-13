@@ -6,12 +6,14 @@
 
 .vega-bind {
     margin-bottom: 15px;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif !important;
 }
 
-.vega-bind-name {
+/*.vega-bind-name {
     margin-right: 10px;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif !important;
     white-space: nowrap
-}
+}*/
 
 .header-inline {
     display: inline-block;
@@ -112,4 +114,31 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     transform: scaleY(1.0);
     -webkit-transform: scaleY(1.0);
   }
+}
+
+
+input[type="range"] {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif !important;
+  font-size: 12px;
+  color: #333;
+  background-color: #f5f5f5;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+span.vega-bind-name {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif !important;
+    font-size: 16px;
+    font-weight: bold;
+    color: #000;
+    margin-right: 10px; /* Space between label and checkbox */
+    white-space: nowrap;
+    padding-left: 5px; /* Move text slightly to the right */
+}
+
+input[type="checkbox"] {
+    width: 16px; /* Adjust size */
+    height: 16px; /* Adjust size */
+    accent-color: #007bff; /* Modern browsers support accent-color for the checkbox */
+    cursor: pointer; /* Change cursor to pointer on hover */
 }
