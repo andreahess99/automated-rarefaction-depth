@@ -1,0 +1,7 @@
+/* Stronger rule to override any inline or default styles */
+#plot .vega-bind-name {
+    font-family: 'Sans-Serif', Arial, Helvetica, sans-serif !important;
+    font-size: 14px !important;
+    color: #333 !important; /* Optional: Adjust color */
+}
+

@@ -57,7 +57,7 @@ def change_html_file(file_path: str) -> None:
 
 def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
                                 iterations: int = 10, table_size: int = None, steps: int = 20,
-                                percent_samples: float = 0.8, algorithm: str = 'kneedle') -> None:
+                                percent_samples: float = 0.8, algorithm: str = 'gradient') -> None:
     
     # Measure runtime & memory usage
     start_time = time.time()
@@ -294,7 +294,9 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
     text_l = pd.DataFrame({'text': ['\n'.join(text)]})
     text_lines = alt.Chart(text_l).mark_text(fontSize=16, size=14, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)#(width=100, height=300)
     upper_chart = alt.vconcat(final_with_line, text_lines).properties(spacing=0)
-
+    #trying to add empty lines to the top of the chart -> maybe delete if not working
+    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=10, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    upper_chart = alt.vconcat(empty_lines, upper_chart).properties(spacing=0)
 
     #barplot of reads_per_sample
     predicate = alt.datum.reads_per_sample >= s 
@@ -331,6 +333,9 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         x='shared',
         y='shared'
     )
+    #trying to add empty lines to the top of the chart -> maybe delete if not working
+    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=10, align='left', baseline='top', lineBreak="\n", dx=-95, dy=-5).encode(text='text:N').properties(width=100, height=50)
+    barplot_combined = alt.vconcat(empty_lines, barplot_combined).properties(spacing=0)
         
     combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60).configure_legend(
         labelFontSize=14,  # Font size of the legend labels
