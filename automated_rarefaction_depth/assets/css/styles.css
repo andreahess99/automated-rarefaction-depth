@@ -142,7 +142,7 @@ input[type="checkbox"] {
     accent-color: #007bff; /* Modern browsers support accent-color for the checkbox */
     cursor: pointer; /* Change cursor to pointer on hover */
 }
-/* moving slider & checkbox, maybe change later */
+/* moving slider & checkbox */
 form.vega-bindings {
   position: absolute;
   left: 0px;

@@ -56,6 +56,6 @@ plugin.visualizers.register_function(
     },
     name='Automated Rarefaction Depth',
     description=("Automatically computes an optimal rarefaction depth."),
-    citations=citations#[citations['Caporaso-Bolyen-2024']],
+    citations=citations,#[citations['Caporaso-Bolyen-2024']],
 )
 
