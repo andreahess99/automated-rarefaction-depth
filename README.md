@@ -24,8 +24,7 @@ conda update conda
 Next, you need to get into the top-level `automated-rarefaction-depth` directory.
 If you already have this (e.g., because you just created the plugin), this may be as simple as running `cd automated-rarefaction-depth`.
 If not, you'll need the `automated-rarefaction-depth` directory on your computer.
-How you do that will differ based on how the package is shared, and ideally the developer will update these instructions to be more specific (remember, these instructions are intended to be a starting point).
-For example, if it's maintained in a GitHub repository, you can achieve this by [cloning the repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository).
+Download this repository.
 Once you have the directory on your computer, change (`cd`) into it.
 
 If you're in a conda environment, deactivate it by running `conda deactivate`.
@@ -49,18 +48,6 @@ Finally, run:
 make install
 ```
 
-## Testing and using the most recent development version of `automated-rarefaction-depth`
-
-After completing the install steps above, confirm that everything is working as expected by running:
-
-```shell
-make test
-```
-
-You should get a report that tests were run, and you should see that all tests passed and none failed.
-It's usually ok if some warnings are reported.
-
-If all of the tests pass, you're ready to use the plugin.
 Start by making QIIME 2's command line interface aware of `automated-rarefaction-depth` by running:
 
 ```shell
