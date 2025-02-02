@@ -6,26 +6,17 @@
 # The full license is in the file LICENSE, distributed with this software.
 # ----------------------------------------------------------------------------
 
-import json
+
 import os
-import pkg_resources
-import shutil
 from urllib.parse import quote
-import functools
-import matplotlib.pyplot as plt
-import scipy
 import numpy as np
 import pandas as pd
 import qiime2
 import q2templates
-import tempfile
-import biom
-import itertools
 from qiime2 import Artifact
 from kneed import KneeLocator
 import altair as alt
 import time
-import psutil
 import tracemalloc
 from shutil import copytree
 from bs4 import BeautifulSoup
@@ -48,7 +39,7 @@ def rarefy(counts, depth, iteration, seed):
 def change_html_file(file_path: str) -> None:
     with open(file_path, 'r') as file:
         soup = BeautifulSoup(file, 'html.parser')
-        link_tag = soup.new_tag('link', rel='stylesheet', href='./css/styles.css')#href='./automated_rarefaction_depth/assets/css/styles.css'
+        link_tag = soup.new_tag('link', rel='stylesheet', href='./css/styles.css')
         soup.head.append(link_tag)
 
     with open(file_path, 'w') as file:
@@ -59,25 +50,19 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
                                 iterations: int = 10, table_size: int = None, steps: int = 20,
                                 percent_samples: float = 0.8, algorithm: str = 'gradient') -> None:
     
-    # Measure runtime & memory usage
-    start_time = time.time()
-    tracemalloc.start()
-    
     min_depth = 1
-    #table_df = table.view(pd.DataFrame)
     table_df = table
 
-    #checks to make sure everything has the format it should have
     if table_df.empty:
         raise ValueError("The feature table is empty.")
     if not np.issubdtype(table_df.values.dtype, np.number):
         raise ValueError("The feature table contains non-numerical values.")
     
-    #table_size = 500
+
     #adjusting table size if it's too big -> keep table_size rows
     if (table_size is not None and len(table_df) > table_size):
-        table_df = table_df.sample(n=table_size, random_state=seed) #randomly select rows, set random_state for reproducibility
-        table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] #remove columns where all values are either 0 or NaN
+        table_df = table_df.sample(n=table_size, random_state=seed) 
+        table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
 
 
     num_samples = len(table_df)
@@ -86,22 +71,18 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
     max_reads = reads_per_sample.max()
     sorted_depths = reads_per_sample.sort_values()
 
-    # calculate the index for the p_sample loss (as an integer)
-    sample_loss_index = int(np.ceil((1-percent_samples) * len(sorted_depths))) - 1 #len(sorted_depths)=number of samples
-
-    # get the sequencing depth at the sample loss index (p_samples of all samples will have fewer reads)
-    # 1 - depth_threshold is the range of possible & valid values for the knee
+    
+    sample_loss_index = int(np.ceil((1-percent_samples) * len(sorted_depths))) - 1 
     depth_threshold = int(sorted_depths.iloc[sample_loss_index])
 
-    #go through every sample and calculate the observed features for each depth
+    
     knee_points = [None] * num_samples
     s = 0
     df_list = []
     
+    #go through every sample and calculate the observed features for each depth
     for sample in table_df.index:
         max_range = np.linspace(min_depth, reads_per_sample.loc[sample], num=steps, dtype=int)
-        #array to store the observed features for each depth, rows: iterations, columns: depths
-        #the different iterations are used to calculate the average of the observed features for each depth & have statistical validity
         array_sample = np.empty((iterations, steps))
 
         sample_values = table_df.loc[sample].values	
@@ -119,7 +100,7 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         df_list.append(sample_df)
         
         if(algorithm.lower().strip() == 'kneedle'):
-            # Use KneeLocator to find the knee point (depth where total abundance starts leveling off)
+            #using KneeLocator to find the knee point 
             kneedle = KneeLocator(max_range, array_sample_avg, curve="concave", direction="increasing")
             knee_points[s] = kneedle.knee
         else:
@@ -134,36 +115,26 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         
 
     combined_df = pd.concat(df_list, ignore_index=True)
-    print(f"df_list size: {combined_df.shape}")
 
-    # Filter out None values
     knee_points_filtered = [point for point in knee_points if point is not None]
-    #calculate the average of all knee points
     knee_point = round(np.mean(knee_points_filtered))
-    print(f"Knee point: {knee_point}")
+   
 
-
-    #finding +-5% points
-    #finding out what percentile my knee point is at
+    #finding +-5% points & at what percentile knee point is
     index = np.searchsorted(sorted_depths, knee_point)
     percentile = (index / len(sorted_depths)) * 100
 
-    #calculate the +-5% percentiles & ensuring it won't be out of bounds
     lower_percentile = max(percentile - 5, 0) 
     upper_percentile = min(percentile + 5, 100) 
 
-    #convert these percentiles to indices for the sorted_depths array
     lower_index = int((lower_percentile / 100) * len(sorted_depths))
     upper_index = min(int((upper_percentile / 100) * len(sorted_depths)), len(sorted_depths) - 1)
 
-    #get the values corresponding to these indices
     lower_value = sorted_depths.iloc[lower_index]
     upper_value = sorted_depths.iloc[upper_index]
 
-    after_algo_time = time.time()
 
     #plotting with altair
-    #registering the theme
     def boots():
         font = "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif"
         return {
@@ -184,7 +155,6 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
              "legend": {
                   "labelFont": font,
                   "titleFont": font,
-                  #"labelfontSize": 26,
                   "titleFontSize": 14
              },
              "text": {
@@ -194,14 +164,14 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         }
     } 
 
-    # Register and enable the theme
+    #register and enable the defined theme
     alt.themes.register('boots', boots)
     alt.themes.enable('boots')
     alt.data_transformers.disable_max_rows()
 
     #plotting the rarefaction curves including the shaded area
     depth_lines = pd.DataFrame({
-        'x': [lower_value, knee_point, upper_value],  # x-values for vertical lines
+        'x': [lower_value, knee_point, upper_value],  
         'label': ['-5%', 'Knee point', '+5%']  
     })
 
@@ -223,7 +193,7 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
     chart = alt.Chart(combined_df).mark_line(point=True).encode(
         x=alt.X('depth:Q', title='Read Depth'),
         y=alt.Y('observed_features:Q', title='# Observed Features'),
-        color=alt.Color('sample:N', legend=None).scale(scheme='category10') #remove .scale(..) if I want the og colors 
+        color=alt.Color('sample:N', legend=None).scale(scheme='category10')  
     ).add_params(
         zoom,
         param_checkbox
@@ -238,7 +208,7 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         x='x_min:Q',
         x2='x_max:Q'
     )
-    my_colors = ["#377eb8", "#f781bf", "#984ea3"]  # possibly change purple to red?, 984ea3 purple, 17becf cyan, 377eb8 blue, f781bf pink, e41a1c red
+    my_colors = ["#377eb8", "#f781bf", "#984ea3"]
 
     vertical_lines = alt.Chart(depth_lines).mark_rule(strokeWidth=2).encode(
         x='x:Q',
@@ -266,8 +236,8 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         param_checkbox
     ).properties(
         title='Interactive Vertical Line',
-        width=450, #600
-        height=350 #400
+        width=450, 
+        height=350 
     )
     
 
@@ -292,11 +262,11 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         text.append(f" be excluded because they have too little reads.")
         
     text_l = pd.DataFrame({'text': ['\n'.join(text)]})
-    text_lines = alt.Chart(text_l).mark_text(fontSize=16, size=14, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)#(width=100, height=300)
+    text_lines = alt.Chart(text_l).mark_text(fontSize=16, size=14, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     upper_chart = alt.vconcat(final_with_line, text_lines).properties(spacing=0)
-    #trying to add empty lines to the top of the chart -> maybe delete if not working
     empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=10, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     upper_chart = alt.vconcat(empty_lines, upper_chart).properties(spacing=0)
+
 
     #barplot of reads_per_sample
     predicate = alt.datum.reads_per_sample >= s 
@@ -333,19 +303,15 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         x='shared',
         y='shared'
     )
-    #trying to add empty lines to the top of the chart -> maybe delete if not working
+    
     empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=10, align='left', baseline='top', lineBreak="\n", dx=-95, dy=-5).encode(text='text:N').properties(width=100, height=50)
     barplot_combined = alt.vconcat(empty_lines, barplot_combined).properties(spacing=0)
         
     combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60).configure_legend(
-        labelFontSize=14,  # Font size of the legend labels
-        titleFontSize=14   # Font size of the legend title
+        labelFontSize=14,  
+        titleFontSize=14   
     )
-    #combined_chart.save('new_chart.png')
-    
-    #change css file path if I want to save it this way
-    #combined_chart.save('new_chart.html')
-    #change_html_file('new_chart.html')
+   
 
     # Check if the file already exists and delete it if it does
     new_chart_path = os.path.join(output_dir, 'new_chart.html')
@@ -354,10 +320,7 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
     combined_chart.save(new_chart_path, inline=True)
     change_html_file(new_chart_path)
     
-    #end measuring runtime & memory usage
-    end_time = time.time()
 
-    #copied from q2-moshpit/busco
     tabbed_context = {}
     vega_json = combined_chart.to_json()
     TEMPLATES = os.path.join(
@@ -377,79 +340,3 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
 
     q2templates.render(templates, output_dir, context=tabbed_context)
 
-
-    #end measuring runtime & memory usage
-    e_time = time.time()
-    current, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    
-    print(f"Current memory usage: {current / 10**6:.4f} MB")
-    print(f"Peak memory usage: {peak / 10**6:.4f} MB")
-
-    total_runtime = e_time - start_time
-    render_time = e_time - end_time
-    algorithm_time = after_algo_time - start_time
-    plot_time = end_time - after_algo_time
-    print(f"Total runtime: {total_runtime:.4f} seconds")
-    print(f"Algorithm time: {algorithm_time:.4f} seconds")
-    print(f"Plotting time: {plot_time:.4f} seconds")
-    print(f"Rendering time: {render_time:.4f} seconds")
-
-    """ #runtime csv
-    # Check if the file exists
-    if os.path.exists("runtime_.csv"):
-        # Load existing data
-        existing_data = np.loadtxt("runtime_.csv", delimiter=",", ndmin=1)
-        print(existing_data)
-        # Append the new value to the existing data
-        updated_data = np.append(existing_data, [total_runtime, algorithm_time, plot_time, render_time])
-    else:
-        # If the file does not exist, create an array with the new value
-        updated_data = np.array([total_runtime, algorithm_time, plot_time, render_time])
-    
-    # Save the updated data back to the file
-    np.savetxt("runtime_.csv", updated_data, delimiter=",", fmt="%f")
-
-    #memory csv in MB
-    if os.path.exists("memory_.csv"):
-        # Load existing data
-        existing_data = np.loadtxt("memory_.csv", delimiter=",", ndmin=1)
-        # Append the new value to the existing data
-        updated_data = np.append(existing_data, (peak / 10**6))
-        
-    else:
-        # If the file does not exist, create an array with the new value
-        updated_data = np.array([peak / 10**6])
-    
-    # Save the updated data back to the file
-    np.savetxt("memory_.csv", updated_data, delimiter=",", fmt="%f")"""
-
-    """existing_data = np.loadtxt("memory_kneedle.csv", delimiter=",", ndmin=1)
-    
-    # Prepare the data for each output file
-    total_time = existing_data[::4]  # 1st, 5th, 9th, etc. (index 0, 4, 8, ...)
-    algo_time = existing_data[1::4]   # 2nd, 6th, 10th, etc. (index 1, 5, 9, ...)
-    plot_time = existing_data[2::4]   # 3rd, 7th, 11th, etc. (index 2, 6, 10, ...)
-    render_time = existing_data[3::4] # 4th, 8th, 12th, etc. (index 3, 7, 11, ...)
-
-    data = [total_time, algo_time, plot_time, render_time]
-
-    plt.boxplot(data)
-    time_categories = ['Total', 'Algorithm', 'Plotting', 'Rendering']
-    plt.xticks([1, 2, 3, 4], time_categories)
-    plt.ylabel("Time in seconds")
-    plt.savefig("box_plot_runtime_kneedle.png", format='png')"""
-
-     
-
-
-
-#to test & get outputs -> delete in the end
-#feature_table_path = "../../table.qza"
-#other feature tables
-#feature_table_path = "../../atacama_soil_table.qza"
-#feature_table_path = "../../parkinson_mouse_dada2_table.qza"
-#very big one
-#feature_table_path = "../../feature-table.qza"
-#ft_artifact = qiime2.Artifact.load(feature_table_path)
-#rarefaction_depth("../../", ft_artifact)
