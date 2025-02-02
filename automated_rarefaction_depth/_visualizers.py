@@ -67,7 +67,6 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
 
 
     num_samples = len(table_df)
-    print(f"Table size: {num_samples} samples; algorithm: {algorithm}")
     reads_per_sample = table_df.sum(axis=1) 
     max_reads = reads_per_sample.max()
     sorted_depths = reads_per_sample.sort_values()
@@ -178,8 +177,6 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
 
     reads_per_sample_df = reads_per_sample.reset_index()
     reads_per_sample_df.columns = ['sample', 'reads_per_sample']
-    print(f"Rows reads per sample df: {len(reads_per_sample_df)}")
-    print(f"Rows combined df: {len(combined_df)}")
 
     zoom = alt.selection_interval(bind='scales')
 
