@@ -37,6 +37,7 @@ def rarefy(counts, depth, iteration, seed):
     return rarefied_counts
 
 def change_html_file(file_path: str) -> None:
+    #add css stylesheet to the html file
     with open(file_path, 'r') as file:
         soup = BeautifulSoup(file, 'html.parser')
         link_tag = soup.new_tag('link', rel='stylesheet', href='./css/styles.css')
