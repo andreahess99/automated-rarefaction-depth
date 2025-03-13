@@ -19,7 +19,9 @@ import altair as alt
 import time
 import tracemalloc
 from shutil import copytree
+import shutil
 from bs4 import BeautifulSoup
+from qiime2 import sdk
 
 
 
@@ -51,20 +53,34 @@ def change_html_file(file_path: str) -> None:
         file.write(str(soup))
 
 
-def rf_depth_pipe(output_dir: str, table: pd.DataFrame, seed: int = 42,
-                                iterations: int = 10, table_size: int = None, steps: int = 20,
-                                percent_samples: float = 0.8, algorithm: str = 'gradient'):
+
+_pipe_defaults = {
+    'seed': 42,
+    'iterations': 10,
+    'table_size': None,
+    'steps': 20,
+    'percent_samples': 0.8,
+    'algorithm': 'gradient'
+}
+
+def rf_depth_pipe(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], steps=_pipe_defaults['steps'],
+                                percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm']):#output_dir: str,
     
     alpha_action = ctx.get_action('boots', 'alpha')
-    result = alpha_action(table=table, sampling_depth=30, metric='observed_features', n=iterations, replacement=False, average_method='mean')
-
-    return result
+    iterations = 10
+    result, = alpha_action(table=table, sampling_depth=30, metric='observed_features', n=iterations, replacement=False, average_method='mean')
+   
+    print("calculated result")
+    
+    rf_depth(table=table.view(pd.DataFrame), output_dir='/home/andrea/automated-rarefaction-depth/', seed=seed, iterations=iterations, table_size=table_size, steps=steps, percent_samples=percent_samples, algorithm=algorithm)
+    print("calculated rf_depth")
+    return qiime2.Visualization.load('/home/andrea/automated-rarefaction-depth/rarefaction-depth-visual.qzv')
     
 
     
 
 
-def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
+def rf_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
                                 iterations: int = 10, table_size: int = None, steps: int = 20,
                                 percent_samples: float = 0.8, algorithm: str = 'gradient') -> None:
     
@@ -130,7 +146,6 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
 
         s += 1
         
-
     combined_df = pd.concat(df_list, ignore_index=True)
 
     knee_points_filtered = [point for point in knee_points if point is not None]
@@ -347,11 +362,17 @@ def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         "vega_json": vega_json
     })
     templates = os.path.join(TEMPLATES, 'index.html')
+    
+    output_assets = os.path.join(output_dir, 'q2templateassets')
+    
+    if os.path.exists(output_assets):
+        shutil.rmtree(output_assets)
+
     copytree(
         src=TEMPLATES,
-        dst=output_dir,
+        dst=output_assets,
         dirs_exist_ok=True
     )
-
+    print("before rendering")
     q2templates.render(templates, output_dir, context=tabbed_context)
 
