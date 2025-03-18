@@ -72,7 +72,8 @@ def rf_depth_pipe(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defa
    
     print("calculated result")
     
-    rf_depth(table=table.view(pd.DataFrame), output_dir='/home/andrea/automated-rarefaction-depth/', seed=seed, iterations=iterations, table_size=table_size, steps=steps, percent_samples=percent_samples, algorithm=algorithm)
+    #rf_depth(table=table.view(pd.DataFrame), output_dir='/home/andrea/automated-rarefaction-depth/', seed=seed, iterations=iterations, table_size=table_size, steps=steps, percent_samples=percent_samples, algorithm=algorithm)
+    rf_depth(table=result, output_dir='/home/andrea/automated-rarefaction-depth/', seed=seed, iterations=iterations, table_size=table_size, steps=steps, percent_samples=percent_samples, algorithm=algorithm)
     print("calculated rf_depth")
     return qiime2.Visualization.load('/home/andrea/automated-rarefaction-depth/rarefaction-depth-visual.qzv')
     
@@ -85,6 +86,12 @@ def rf_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
                                 percent_samples: float = 0.8, algorithm: str = 'gradient') -> None:
     
     min_depth = 1
+    #needed because of direct import of artefact
+    """if isinstance(table, Artifact):
+        #table = table.view(pd.DataFrame)
+        metadata = table.view(qiime2.Metadata)
+        table = metadata.to_dataframe()"""
+
     table_df = table
 
     if table_df.empty:
@@ -363,14 +370,17 @@ def rf_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
     })
     templates = os.path.join(TEMPLATES, 'index.html')
     
-    output_assets = os.path.join(output_dir, 'q2templateassets')
+    """output_assets = os.path.join(output_dir, 'q2templateassets')
     
-    if os.path.exists(output_assets):
-        shutil.rmtree(output_assets)
-
+    if os.path.exists(output_assets): # do not remove output_dir!!!!!!!
+        shutil.rmtree(output_assets)"""
+    
+    output_dir = os.path.join(output_dir, 'q2templateassets_pipe')
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
     copytree(
         src=TEMPLATES,
-        dst=output_assets,
+        dst=output_dir,#output_assets,
         dirs_exist_ok=True
     )
     print("before rendering")
