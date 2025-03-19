@@ -22,6 +22,7 @@ from shutil import copytree
 import shutil
 from bs4 import BeautifulSoup
 from qiime2 import sdk
+from tempfile import TemporaryDirectory
 
 
 
@@ -63,36 +64,13 @@ _pipe_defaults = {
     'algorithm': 'gradient'
 }
 
-def rf_depth_pipe(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], steps=_pipe_defaults['steps'],
-                                percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm']):#output_dir: str,
+def rf_depth_pipe(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
+                   steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm']):#output_dir: str,
     
     alpha_action = ctx.get_action('boots', 'alpha')
-    iterations = 10
-    result, = alpha_action(table=table, sampling_depth=30, metric='observed_features', n=iterations, replacement=False, average_method='mean')
-   
-    print("calculated result")
-    
-    #rf_depth(table=table.view(pd.DataFrame), output_dir='/home/andrea/automated-rarefaction-depth/', seed=seed, iterations=iterations, table_size=table_size, steps=steps, percent_samples=percent_samples, algorithm=algorithm)
-    rf_depth(table=result, output_dir='/home/andrea/automated-rarefaction-depth/', seed=seed, iterations=iterations, table_size=table_size, steps=steps, percent_samples=percent_samples, algorithm=algorithm)
-    print("calculated rf_depth")
-    return qiime2.Visualization.load('/home/andrea/automated-rarefaction-depth/rarefaction-depth-visual.qzv')
-    
 
-    
-
-
-def rf_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
-                                iterations: int = 10, table_size: int = None, steps: int = 20,
-                                percent_samples: float = 0.8, algorithm: str = 'gradient') -> None:
-    
     min_depth = 1
-    #needed because of direct import of artefact
-    """if isinstance(table, Artifact):
-        #table = table.view(pd.DataFrame)
-        metadata = table.view(qiime2.Metadata)
-        table = metadata.to_dataframe()"""
-
-    table_df = table
+    table_df = table.view(pd.DataFrame)
 
     if table_df.empty:
         raise ValueError("The feature table is empty.")
@@ -105,56 +83,72 @@ def rf_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         table_df = table_df.sample(n=table_size, random_state=seed) 
         table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
 
-
+    print("after table size adjustment")
     num_samples = len(table_df)
     reads_per_sample = table_df.sum(axis=1) 
     max_reads = reads_per_sample.max()
     sorted_depths = reads_per_sample.sort_values()
 
-    
     sample_loss_index = int(np.ceil((1-percent_samples) * len(sorted_depths))) - 1 
     depth_threshold = int(sorted_depths.iloc[sample_loss_index])
 
-    
     knee_points = [None] * num_samples
     s = 0
     df_list = []
-    
+
+    print("before loop to calculate rf")
     #go through every sample and calculate the observed features for each depth
     for sample in table_df.index:
         max_range = np.linspace(min_depth, reads_per_sample.loc[sample], num=steps, dtype=int)
-        array_sample = np.empty((iterations, steps))
+        array_sample = np.empty(steps)
 
         sample_values = table_df.loc[sample].values	
 
         for i in range(steps):
-            temp = max_range[i]
-            for j in range(iterations):
-                rarefied_sample = rarefy(sample_values, temp, j, seed)
-                c = np.count_nonzero(rarefied_sample)
-                array_sample[j, i] = c
-                
-        array_sample_avg = np.mean(array_sample, axis=0)
+            #rarefied_sample = rarefy(sample_values, temp, j, seed)
+            print("before alpha_action")
+            table_artifact = Artifact.import_data('FeatureTable[Frequency]', table_df)
+            result, = alpha_action(table=table_artifact, sampling_depth=max_range[i], metric='observed_features', n=iterations, replacement=False, average_method='mean')
+            metadata = result.view(qiime2.Metadata)
+            rarefied_sample = metadata.to_dataframe()
+            array_sample[i] = rarefied_sample.loc[sample, "observed_features"]#rarefied_sample[sample]
+            print(array_sample[i])  
         
-        sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample_avg, 'sample': sample})
+        sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample, 'sample': sample})
         df_list.append(sample_df)
-        
         if(algorithm.lower().strip() == 'kneedle'):
             #using KneeLocator to find the knee point 
-            kneedle = KneeLocator(max_range, array_sample_avg, curve="concave", direction="increasing")
+            kneedle = KneeLocator(max_range, array_sample, curve="concave", direction="increasing")
             knee_points[s] = kneedle.knee
         else:
             #using the gradient method
-            curr_array = array_sample_avg
+            curr_array = array_sample
             first_derivative = np.gradient(curr_array, max_range)
             second_derivative = np.gradient(first_derivative, max_range)
             max_index = np.argmax(second_derivative)
             knee_points[s] = max_range[max_index]
 
         s += 1
-        
-    combined_df = pd.concat(df_list, ignore_index=True)
 
+    combined_df = pd.concat(df_list, ignore_index=True)
+    print("after rf loop")
+    
+    rf_depth(output_dir=ctx.output_dir, percent_samples=percent_samples,
+              reads_per_sample=reads_per_sample, knee_points=knee_points, sorted_depths=sorted_depths, max_reads=max_reads, combined_df=combined_df, depth_threshold=depth_threshold)
+    print("after calling rf_depth")
+    
+    #visualization = rf_depth(table=result, output_dir=output_dir, seed=seed, iterations=iterations, table_size=table_size, steps=steps, percent_samples=percent_samples, algorithm=algorithm)
+    visualization = qiime2.Visualization.load(os.path.join(output_dir, "output.qzv"))
+    #rf_depth(table=result, output_dir='/home/andrea/automated-rarefaction-depth/', seed=seed, iterations=iterations, table_size=table_size, steps=steps, percent_samples=percent_samples, algorithm=algorithm)
+    print("calculated rf_depth")
+    return visualization
+    #return qiime2.Visualization.load('/home/andrea/automated-rarefaction-depth/rarefaction-depth_visual.qzv')
+    
+
+
+
+def rf_depth(output_dir: str, percent_samples, reads_per_sample,knee_points, sorted_depths, max_reads, combined_df, depth_threshold)-> None:
+    
     knee_points_filtered = [point for point in knee_points if point is not None]
     knee_point = round(np.mean(knee_points_filtered))
    
@@ -171,7 +165,6 @@ def rf_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
 
     lower_value = sorted_depths.iloc[lower_index]
     upper_value = sorted_depths.iloc[upper_index]
-
 
     #plotting with altair
     def boots():
@@ -349,7 +342,6 @@ def rf_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         titleFontSize=14   
     )
    
-
     # Check if the file already exists and delete it if it does
     new_chart_path = os.path.join(output_dir, 'new_chart.html')
     if os.path.exists(new_chart_path):
@@ -369,20 +361,23 @@ def rf_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
         "vega_json": vega_json
     })
     templates = os.path.join(TEMPLATES, 'index.html')
-    
-    """output_assets = os.path.join(output_dir, 'q2templateassets')
-    
-    if os.path.exists(output_assets): # do not remove output_dir!!!!!!!
-        shutil.rmtree(output_assets)"""
-    
-    output_dir = os.path.join(output_dir, 'q2templateassets_pipe')
-    if os.path.exists(output_dir):
-        shutil.rmtree(output_dir)
+
+    output_dir_n = os.path.join(output_dir, 'q2templateassets')
+    if os.path.exists(output_dir_n):
+        shutil.rmtree(output_dir_n)
+
     copytree(
         src=TEMPLATES,
-        dst=output_dir,#output_assets,
+        dst=output_dir_n,#output_assets,
         dirs_exist_ok=True
     )
-    print("before rendering")
-    q2templates.render(templates, output_dir, context=tabbed_context)
+    print("output_dir:")
+    print(output_dir_n)
+    
+    q2templates.render(templates, output_dir_n, context=tabbed_context)
+    """output_html_path = os.path.join(output_dir, 'pipe_output.qzv')
+    provenance = qiime2.sdk.parse_context().provenance
+    visualization = qiime2.Visualization._from_data_dir(output_dir, provenance_capture=provenance)
+    visualization.save(output_html_path)"""
+    #return qiime2.Visualization.load(output_html_path)
 
