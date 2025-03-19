@@ -47,6 +47,10 @@ make install
 ```Install the Kneed library
 pip install kneed
 ```
+```Install the Vega-Lite compiler
+pip install "vl-convert-python>=1.6.0"
+```
+ 
 Start by making QIIME 2's command line interface aware of `automated-rarefaction-depth` by running:
 
 ```shell
