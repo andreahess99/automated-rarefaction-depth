@@ -44,6 +44,9 @@ Finally, run:
 make install
 ```
 
+```Install the Kneed library
+pip install kneed
+```
 Start by making QIIME 2's command line interface aware of `automated-rarefaction-depth` by running:
 
 ```shell
