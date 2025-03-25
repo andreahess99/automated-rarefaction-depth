@@ -9,10 +9,9 @@
 
 from ._version import get_versions
 from ._visualizers import rarefaction_depth
-#new pipline file
-from ._pipeline import rf_depth_pipe, pipeline_test_new, _rf_visualizer
+from ._pipeline import pipeline_test_new, _rf_visualizer
 
-__all__ = ['rarefaction_depth', 'rf_depth_pipe', 'pipeline_test_new', '_rf_visualizer']	
+__all__ = ['rarefaction_depth', 'pipeline_test_new', '_rf_visualizer']	
 
 __version__ = get_versions()["version"]
 del get_versions
