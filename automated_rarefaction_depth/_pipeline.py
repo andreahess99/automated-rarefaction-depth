@@ -23,6 +23,7 @@ import shutil
 from bs4 import BeautifulSoup
 from qiime2 import sdk
 from tempfile import TemporaryDirectory
+from qiime2.plugin import Visualization
 #import warnings
 
 
@@ -57,15 +58,15 @@ def change_html_file(file_path: str) -> None:
 
 _pipe_defaults = {
     'seed': 42,
-    'iterations': 10,
+    'iterations': 2, #10
     'table_size': None,
-    'steps': 20,
+    'steps': 5, #20
     'percent_samples': 0.8,
     'algorithm': 'gradient'
 }
 
-#doesn't work for an inexplicable reason, delet later
-"""def rf_depth_pipe(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
+#doesn't work for an inexplicable reason, delete later
+def rf_depth_pipe(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm']):#output_dir: str,
     print("started!")
     alpha_action = ctx.get_action('boots', 'alpha')
@@ -146,10 +147,10 @@ _pipe_defaults = {
     print("calculated rf_depth")
     return visualization
     #return qiime2.Visualization.load('/home/andrea/automated-rarefaction-depth/rarefaction-depth.qzv')
-    """
+    
 
 
-def pipeline_test(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
+def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm']):#output_dir: str,
     print("started!")
     alpha_action = ctx.get_action('boots', 'alpha')
@@ -165,6 +166,8 @@ def pipeline_test(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defa
     
 
     #adjusting table size if it's too big -> keep table_size rows
+    #delete this later:
+    table_size = 10
     if (table_size is not None and len(table_df) > table_size):
         table_df = table_df.sample(n=table_size, random_state=seed) 
         table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
@@ -236,10 +239,9 @@ def pipeline_test(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defa
     #combined_df = pd.concat(df_list, ignore_index=True)
     print("after rf loop")
     
-    _rf_visualizer(output_dir=ctx.output_dir, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, artifacts_list=artifacts_list, 
+    _rf_visualizer(output_dir='/home/andrea/automated-rarefaction-depth/', percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, artifacts_list=artifacts_list, 
                    sorted_depths=sorted_depths_pass, max_reads=max_reads, depth_threshold=depth_threshold, sample_list=sample_list, depths_list=depths_list, steps=steps, algorithm=algorithm)
     print("after calling rf_visualizer")
-    
     
 
     #rf_depth(table=result, output_dir='/home/andrea/automated-rarefaction-depth/', seed=seed, iterations=iterations, table_size=table_size, steps=steps, percent_samples=percent_samples, algorithm=algorithm)
@@ -247,20 +249,35 @@ def pipeline_test(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defa
     #change to real return value!! just a placeholder for right now to not get errors!
     return qiime2.Visualization.load('/home/andrea/automated-rarefaction-depth/rarefaction-depth.qzv')
     
+    
 
 
 
-def _rf_visualizer(output_dir: str, percent_samples, reads_per_sample, artifacts_list, sorted_depths, max_reads, depth_threshold, sample_list, depths_list, steps, algorithm)-> None:
+def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: set[int], artifacts_list: set[pd.DataFrame], sorted_depths: set[int], max_reads: int, depth_threshold: int, sample_list: set[str], depths_list: set[int], steps: int, algorithm: str)-> None:
     
     print("in rf_visualizer")
+    sorted_depths = pd.Series(sorted_depths)
+    if isinstance(reads_per_sample, list):
+        print("reads_per_sample is a list")
+        reads_per_sample = pd.DataFrame(reads_per_sample)
+
     counter = 0
     knee_points = [None] * len(sample_list)
     df_list = []
-    pd_list = [artifact.view(qiime2.Metadata).to_dataframe for artifact in artifacts_list]
+    pd_list = [artifact.view(qiime2.Metadata).to_dataframe() for artifact in artifacts_list]
 
     for sample in sample_list:
         max_range = np.array(depths_list[counter])
-        array_sample = np.array(pd_list[counter * index : (counter + 1) * index])
+        array_sample = np.array(pd_list[counter * steps : (counter + 1) * steps])
+
+        print(f"array_sample shape: {(array_sample)}")
+        array_sample = array_sample.flatten()  
+        sample = np.full(len(max_range), sample)  # Create an array of repeated values
+
+
+        print(f"max_range shape: {np.shape(max_range)}")
+        print(f"array_sample shape: {np.shape(array_sample)}")
+        print(f"sample shape: {np.shape(sample)}")
 
         sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample, 'sample': sample})
         df_list.append(sample_df)
@@ -271,6 +288,14 @@ def _rf_visualizer(output_dir: str, percent_samples, reads_per_sample, artifacts
         else:
             #using the gradient method
             curr_array = array_sample
+            print("curr_array:")
+            print(curr_array)
+            print(type(curr_array))
+            print(curr_array.shape)
+            print("max_range:")
+            print(max_range)
+            print(type(max_range))
+            print(max_range.shape)
             first_derivative = np.gradient(curr_array, max_range)
             second_derivative = np.gradient(first_derivative, max_range)
             max_index = np.argmax(second_derivative)
@@ -283,6 +308,10 @@ def _rf_visualizer(output_dir: str, percent_samples, reads_per_sample, artifacts
     
     knee_points_filtered = [point for point in knee_points if point is not None]
     knee_point = round(np.mean(knee_points_filtered))
+    print("knee_point:")
+    print(knee_point)
+    print("knee_points:")
+    print(knee_points)
    
 
     #finding +-5% points & at what percentile knee point is
@@ -512,4 +541,5 @@ def _rf_visualizer(output_dir: str, percent_samples, reads_per_sample, artifacts
     visualization = qiime2.Visualization._from_data_dir(output_dir, provenance_capture=provenance)
     visualization.save(output_html_path)"""
     #return qiime2.Visualization.load(output_html_path)
+    
 

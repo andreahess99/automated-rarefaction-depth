@@ -15,7 +15,7 @@ from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.sample_data import AlphaDiversity, SampleData
 from q2_types.tree import Phylogeny, Rooted
 from automated_rarefaction_depth import __version__
-from automated_rarefaction_depth._pipeline import rf_depth_pipe, pipeline_test, _rf_visualizer
+from automated_rarefaction_depth._pipeline import rf_depth_pipe, pipeline_test_new, _rf_visualizer
 
 
 citations = Citations.load("citations.bib", package="automated_rarefaction_depth")
@@ -90,7 +90,7 @@ plugin.pipelines.register_function(
 
 
 plugin.pipelines.register_function(
-    function=pipeline_test,
+    function=pipeline_test_new,
     inputs={'table': FeatureTable[Frequency]},
     outputs={'visualization': Visualization},
     parameters={'seed': Int % Range(1, None),
@@ -118,11 +118,11 @@ plugin.pipelines.register_function(
 
 plugin.visualizers.register_function(
     function=_rf_visualizer,
-    inputs={'table': FeatureTable[Frequency]},
+    inputs={'artifacts_list': Set[FeatureTable[Frequency]]},#'table': FeatureTable[Frequency]
     parameters={'sorted_depths': Set[Int],
                 'percent_samples': Float % Range(0, 1),
                 'reads_per_sample': Set[Int],
-                'artifacts_list': Set[SampleData[AlphaDiversity]], #potentially wrong types for artifacts
+                #'artifacts_list': Set[FeatureTable[Frequency]], #potentially wrong types for artifacts
                 'max_reads': Int % Range(1, None),
                 'depth_threshold': Int % Range(1, None),
                 'sample_list': Set[Str],
@@ -131,15 +131,15 @@ plugin.visualizers.register_function(
                 'algorithm': Str % Choices("kneedle", "gradient")
                 },
     input_descriptions={
-        'table': ('Feature table to compute rarefaction curves from.')
+        'artifacts_list': 'A set of .qza files containing AlphaDiversity artifacts.'#'table': ('Feature table to compute rarefaction curves from.')
     },
     parameter_descriptions={
         'sorted_depths': 'A list of sorted depths as integers.',
         'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
         'reads_per_sample': 'A list of how many reads each sample has.',
-        'artifacts_list': 'A set of .qza files containing AlphaDiversity artifacts.',
+        #'artifacts_list': 'A set of .qza files containing AlphaDiversity artifacts.',
         'max_reads': 'The maximum amount of reads a single sample has.',
-        'depth_threshold': 'The highest read_depth to still be within the accepted area.'
+        'depth_threshold': 'The highest read_depth to still be within the accepted area.',
         'sample_list': 'The list of samples in the order they are processed.', 
         'depths_list': 'The depths used for the different samples in the order they are processed.',
         'steps': 'The number of depths that get evaluated for each sample.',
@@ -149,3 +149,5 @@ plugin.visualizers.register_function(
     description=("Automatically computes an optimal rarefaction depth."),
     citations=citations,
 )
+
+
