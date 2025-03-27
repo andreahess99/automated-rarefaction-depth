@@ -9,13 +9,14 @@
 import automated_rarefaction_depth
 from qiime2.plugin import (Plugin, Str, Properties, Choices, Int, Bool, Range,
                            Float, Set, Visualization, Metadata, MetadataColumn,
-                           Categorical, Numeric, Citations, Threads)
+                           Categorical, Numeric, Citations, Threads, List)
 import q2_diversity
 from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.sample_data import AlphaDiversity, SampleData
 from q2_types.tree import Phylogeny, Rooted
 from automated_rarefaction_depth import __version__
 from automated_rarefaction_depth._pipeline import pipeline_test_new, _rf_visualizer
+import qiime2
 
 
 citations = Citations.load("citations.bib", package="automated_rarefaction_depth")
@@ -88,15 +89,15 @@ plugin.pipelines.register_function(
 
 plugin.visualizers.register_function(
     function=_rf_visualizer,
-    inputs={'artifacts_list': Set[FeatureTable[Frequency]]},#'table': FeatureTable[Frequency]
-    parameters={'sorted_depths': Set[Int],
+    inputs={'artifacts_list': List[SampleData[AlphaDiversity]]},#List[FeatureTable[Frequency]]},#'table': FeatureTable[Frequency]
+    parameters={'sorted_depths': List[Int],
                 'percent_samples': Float % Range(0, 1),
-                'reads_per_sample': Set[Int],
+                'reads_per_sample': List[Int],
                 #'artifacts_list': Set[FeatureTable[Frequency]], #potentially wrong types for artifacts
                 'max_reads': Int % Range(1, None),
                 'depth_threshold': Int % Range(1, None),
-                'sample_list': Set[Str],
-                'depths_list': Set[Int],
+                'sample_list': List[Str],
+                'depths_list': List[Int],
                 'steps': Int % Range(5, 100),
                 'algorithm': Str % Choices("kneedle", "gradient")
                 },
