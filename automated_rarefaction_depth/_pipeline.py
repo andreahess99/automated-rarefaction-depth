@@ -27,10 +27,21 @@ from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.sample_data import AlphaDiversity, SampleData
 import inspect
 import warnings
+from biom import Table
 
 
 # change so that q2-boots is used and it's a pipeline, not a visualizer anymore
 # semester project 
+
+
+def df_to_feature_table(df: pd.DataFrame) -> qiime2.Artifact:
+    # Convert DataFrame to BIOM format
+    biom_table = Table(df.values, observation_ids=df.index, sample_ids=df.columns)
+    
+    # Convert BIOM table to QIIME 2 FeatureTable[Frequency] Artifact
+    feature_table_artifact = qiime2.Artifact.import_data("FeatureTable[Frequency]", biom_table)
+    
+    return feature_table_artifact  # Return the Artifact
 
 
 def rarefy(counts, depth, iteration, seed):
@@ -168,14 +179,16 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
         alpha_diversity_df = artifact.view(qiime2.Metadata).to_dataframe()
         print(alpha_diversity_df)"""
     #artifacts_list_ad = [artifact.view(SampleData[AlphaDiversity]) for artifact in artifacts_list]
-    artifacts_list_a = [artifact.view(pd.Series) for artifact in artifacts_list]
+    """artifacts_list_a = [artifact.view(pd.Series) for artifact in artifacts_list]
     print("after converting to pd.Series")
-    print(artifacts_list_a[0].type)
-    print(artifacts_list_a[0].format)
+    artifacts_list_ad = [artifact.view(pd.DataFrame) for artifact in artifacts_list_a]"""
+    
 
     #trying new approach because nothing else works
     for i, artifact in enumerate(artifacts_list):
         print(f"Exporting artifact {i}")
+        print(artifact.type)
+        print(artifact.format)
         artifact.export_data(f'output_directory_{i}')  # Export each artifact
     dfs = []
     for i in range(len(artifacts_list)):
@@ -192,15 +205,39 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
     print(final_df.index)
     print(final_df.dtypes)
 
-    artifacts_list_ad = [artifact.view(pd.DataFrame) for artifact in artifacts_list_a]
-    print("after converting to pd.DataFrame")
-    print(artifacts_list_ad[0].type)
-    print(artifacts_list_ad[0].format)
+    #making a new df
+    pd_new = pd.DataFrame(
+        np.nan,  # Use np.nan or another default value
+        index=[sample_list[i] for i in range(table_size)],  # Sample names
+        columns=[f"Step_{j+1}" for j in range(steps)]  # Step names
+    )
+    final_df = final_df.reset_index(drop=True)
+    print("final_df after resetting index:")
+    print(final_df)
+    print(final_df.index)
+    for i in range(table_size):
+        for j in range(steps):
+            pd_new.iloc[i, j] = final_df.iloc[(i*steps) + j]
+    pd_new = pd_new.round().astype(int)
+    print("pd_new:")
+    print(pd_new)
+    print(pd_new.shape)
+    print(pd_new.columns)
+    print(pd_new.index)
+    print(pd_new.dtypes)
+    print(type(pd_new))
 
+    artifact_ft = df_to_feature_table(pd_new)
+    print("artifact_ft:")
+    print(artifact_ft)
+    print(type(artifact_ft))
+    print(artifact_ft.type)
+    """artifact_ft_new = Artifact.import_data("FeatureTable[Frequency]", pd_new)
+    print("artifact_ft_new:")
+    print(artifact_ft_new)
+    print(type(artifact_ft_new))"""
 
-
-    print(artifacts_list_ad)
-    visualization, = viz_action( percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, artifacts_list=artifacts_list_ad, #output_dir=temp_dir,
+    visualization, = viz_action( percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, artifacts_list=artifact_ft, #output_dir=temp_dir,
                    sorted_depths=sorted_depths_pass, max_reads=int(max_reads), depth_threshold=int(depth_threshold), sample_list=sample_list, depths_list=depths_list, steps=int(steps), algorithm=algorithm)
     print("after calling rf_visualizer")
     
@@ -213,9 +250,15 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
 
 
 
-def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: list[SampleData[AlphaDiversity]], sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], depths_list: list[int], steps: int, algorithm: str)-> None:
+def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: pd.DataFrame, sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], depths_list: list[int], steps: int, algorithm: str)-> None:
     
     print("in rf_visualizer")
+    print("artifacts_list type:", type(artifacts_list))
+    print(artifacts_list)
+    print(artifacts_list.shape)
+    print(artifacts_list.columns)
+    print(artifacts_list.index)
+    print(artifacts_list.dtypes)
 
     sorted_depths = pd.Series(sorted_depths)
     if isinstance(reads_per_sample, list):
@@ -225,18 +268,18 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
     counter = 0
     knee_points = [None] * len(sample_list)
     df_list = []
-    pd_list = [artifact.view(qiime2.Metadata).to_dataframe() for artifact in artifacts_list]
+    pd_list = artifacts_list
 
     #change depths_list has new type now, not list of list anymore, just a single list
 
     for sample in sample_list:
         max_range = np.array(depths_list[counter*steps : (counter + 1) * steps]) #check if correct!!
-        array_sample = np.array(pd_list[counter * steps : (counter + 1) * steps])
+        array_sample = np.array(pd_list[counter])
 
         print(f"array_sample shape: {(array_sample)}")
         array_sample = array_sample.flatten()  
+        print(f"array_sample shape: {(array_sample)}")
         sample = np.full(len(max_range), sample)  # Create an array of repeated values
-
 
         print(f"max_range shape: {np.shape(max_range)}")
         print(f"array_sample shape: {np.shape(array_sample)}")

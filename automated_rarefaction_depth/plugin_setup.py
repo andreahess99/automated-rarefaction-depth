@@ -17,6 +17,7 @@ from q2_types.tree import Phylogeny, Rooted
 from automated_rarefaction_depth import __version__
 from automated_rarefaction_depth._pipeline import pipeline_test_new, _rf_visualizer
 import qiime2
+import pandas as pd
 
 
 citations = Citations.load("citations.bib", package="automated_rarefaction_depth")
@@ -89,7 +90,7 @@ plugin.pipelines.register_function(
 
 plugin.visualizers.register_function(
     function=_rf_visualizer,
-    inputs={'artifacts_list': List[SampleData[AlphaDiversity]]},#List[FeatureTable[Frequency]]},#'table': FeatureTable[Frequency]
+    inputs={'artifacts_list': FeatureTable[Frequency]},#List[FeatureTable[Frequency]]},#'table': 
     parameters={'sorted_depths': List[Int],
                 'percent_samples': Float % Range(0, 1),
                 'reads_per_sample': List[Int],
