@@ -195,6 +195,7 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
         print(f"Reading artifact {i}")
         df = pd.read_csv(f'output_directory_{i}/alpha-diversity.tsv', sep='\t', index_col=0)
         dfs.append(df)
+    
 
     # If you want a single DataFrame
     final_df = pd.concat(dfs, axis=0)
@@ -240,7 +241,20 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
     visualization, = viz_action( percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, artifacts_list=artifact_ft, #output_dir=temp_dir,
                    sorted_depths=sorted_depths_pass, max_reads=int(max_reads), depth_threshold=int(depth_threshold), sample_list=sample_list, depths_list=depths_list, steps=int(steps), algorithm=algorithm)
     print("after calling rf_visualizer")
-    
+
+    # Clean up the exported directories and files
+    for i in range(len(artifacts_list)):
+        dir_path = f'output_directory_{i}'
+        file_path = os.path.join(dir_path, 'alpha-diversity.tsv')
+        
+        # Remove the alpha-diversity.tsv file
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        
+        # Remove the output directory
+        if os.path.exists(dir_path):
+            shutil.rmtree(dir_path)
+    print("after cleaning up")
 
     return visualization
     #change to real return value!! just a placeholder for right now to not get errors!
@@ -259,6 +273,7 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
     print(artifacts_list.columns)
     print(artifacts_list.index)
     print(artifacts_list.dtypes)
+    
 
     sorted_depths = pd.Series(sorted_depths)
     if isinstance(reads_per_sample, list):
@@ -268,17 +283,19 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
     counter = 0
     knee_points = [None] * len(sample_list)
     df_list = []
-    pd_list = artifacts_list
+    pd_list = artifacts_list.transpose()
+    print("pd_list:")
+    print(pd_list)
+    print(pd_list.shape)  
 
     #change depths_list has new type now, not list of list anymore, just a single list
 
     for sample in sample_list:
         max_range = np.array(depths_list[counter*steps : (counter + 1) * steps]) #check if correct!!
-        array_sample = np.array(pd_list[counter])
+        array_sample = np.array(pd_list.iloc[counter])
 
         print(f"array_sample shape: {(array_sample)}")
-        array_sample = array_sample.flatten()  
-        print(f"array_sample shape: {(array_sample)}")
+        array_sample = array_sample.flatten()
         sample = np.full(len(max_range), sample)  # Create an array of repeated values
 
         print(f"max_range shape: {np.shape(max_range)}")
@@ -515,7 +532,7 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
         os.remove(new_chart_path)
 
     print(new_chart_path)
-
+    combined_chart.save("/home/andrea/automated-rarefaction-depth/result/combined_chart.html", embed_options={'actions': False})
     combined_chart.save(new_chart_path, inline=True)
     change_html_file(new_chart_path)
     
