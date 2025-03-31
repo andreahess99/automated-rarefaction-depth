@@ -74,7 +74,7 @@ _pipe_defaults = {
     'table_size': None,
     'steps': 5, #20
     'percent_samples': 0.8,
-    'algorithm': 'kneedle'
+    'algorithm': 'gradient'
 }
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -257,9 +257,6 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
     print("after cleaning up")
 
     return visualization
-    #change to real return value!! just a placeholder for right now to not get errors!
-    #return qiime2.Visualization.load('/home/andrea/automated-rarefaction-depth/rarefaction-depth.qzv')
-    
     
 
 
@@ -311,14 +308,6 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
         else:
             #using the gradient method
             curr_array = array_sample
-            print("curr_array:")
-            print(curr_array)
-            print(type(curr_array))
-            print(curr_array.shape)
-            print("max_range:")
-            print(max_range)
-            print(type(max_range))
-            print(max_range.shape)
             first_derivative = np.gradient(curr_array, max_range)
             second_derivative = np.gradient(first_derivative, max_range)
             max_index = np.argmax(second_derivative)
@@ -527,11 +516,16 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
     )
    
     # Check if the file already exists and delete it if it does
-    new_chart_path = os.path.join(output_dir, 'new_chart.html')
+    output_dir_n = os.path.join(output_dir, 'q2templateassets')
+    if os.path.exists(output_dir_n):
+        shutil.rmtree(output_dir_n)
+
+    new_chart_path = os.path.join(output_dir, 'new_chart.html') 
     if os.path.exists(new_chart_path):
         os.remove(new_chart_path)
 
     print(new_chart_path)
+    #for debug purposes
     combined_chart.save("/home/andrea/automated-rarefaction-depth/result/combined_chart.html", embed_options={'actions': False})
     combined_chart.save(new_chart_path, inline=True)
     change_html_file(new_chart_path)
@@ -548,10 +542,6 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
         "vega_json": vega_json
     })
     templates = os.path.join(TEMPLATES, 'index.html')
-
-    output_dir_n = os.path.join(output_dir, 'q2templateassets')
-    if os.path.exists(output_dir_n):
-        shutil.rmtree(output_dir_n)
 
     copytree(
         src=TEMPLATES,

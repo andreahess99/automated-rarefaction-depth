@@ -49,7 +49,7 @@ def change_html_file(file_path: str) -> None:
 
 def rarefaction_depth(output_dir: str, table: pd.DataFrame, seed: int = 42,
                                 iterations: int = 10, table_size: int = None, steps: int = 20,
-                                percent_samples: float = 0.8, algorithm: str = 'gradient') -> None:
+                                percent_samples: float = 0.8, algorithm: str = 'kneedle') -> None:
     
     min_depth = 1
     table_df = table
