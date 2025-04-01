@@ -516,9 +516,10 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
     )
    
     # Check if the file already exists and delete it if it does
-    output_dir_n = os.path.join(output_dir, 'q2templateassets')
+    """output_dir_n = os.path.join(output_dir, 'q2templateassets')
     if os.path.exists(output_dir_n):
-        shutil.rmtree(output_dir_n)
+        shutil.rmtree(output_dir_n)"""
+    output_dir_n = output_dir
 
     new_chart_path = os.path.join(output_dir, 'new_chart.html') 
     if os.path.exists(new_chart_path):
@@ -526,18 +527,17 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
 
     print(new_chart_path)
     #for debug purposes
-    combined_chart.save("/home/andrea/automated-rarefaction-depth/result/combined_chart.html", embed_options={'actions': False})
+    #combined_chart.save("/home/andrea/automated-rarefaction-depth/result/combined_chart.html", embed_options={'actions': False})
     combined_chart.save(new_chart_path, inline=True)
     change_html_file(new_chart_path)
     
-
     tabbed_context = {}
     vega_json = combined_chart.to_json()
     TEMPLATES = os.path.join(
         os.path.dirname(__file__),
         "assets"
     )
-    
+
     tabbed_context.update({
         "vega_json": vega_json
     })
@@ -548,9 +548,7 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
         dst=output_dir_n,
         dirs_exist_ok=True
     )
-    print("output_dir:")
-    print(output_dir_n)
-    
+  
     q2templates.render(templates, output_dir_n, context=tabbed_context)
     
 
