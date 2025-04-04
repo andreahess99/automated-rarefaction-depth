@@ -30,9 +30,6 @@ import warnings
 from biom import Table
 
 
-# change so that q2-boots is used and it's a pipeline, not a visualizer anymore
-# semester project 
-
 
 def df_to_feature_table(df: pd.DataFrame) -> qiime2.Artifact:
     # Convert DataFrame to BIOM format
@@ -41,7 +38,7 @@ def df_to_feature_table(df: pd.DataFrame) -> qiime2.Artifact:
     # Convert BIOM table to QIIME 2 FeatureTable[Frequency] Artifact
     feature_table_artifact = qiime2.Artifact.import_data("FeatureTable[Frequency]", biom_table)
     
-    return feature_table_artifact  # Return the Artifact
+    return feature_table_artifact  
 
 
 def rarefy(counts, depth, iteration, seed):
@@ -96,19 +93,15 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
     
 
     #adjusting table size if it's too big -> keep table_size rows
-    #delete this later:
-    table_size = 10
+
     if (table_size is not None and len(table_df) > table_size):
         table_df = table_df.sample(n=table_size, random_state=seed) 
         table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
 
-    print("after table size adjustment")
-    #num_samples = len(table_df)
     reads_per_sample = table_df.sum(axis=1) 
     max_reads = reads_per_sample.max()
     sorted_depths = reads_per_sample.sort_values() 
 
-    #pass as list of integers 
     sorted_depths_pass = sorted_depths.tolist()
     sorted_depths_pass = [int(depth) for depth in sorted_depths_pass]
     reads_per_sample_pass = reads_per_sample.tolist()
@@ -117,9 +110,6 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
     sample_loss_index = int(np.ceil((1-percent_samples) * len(sorted_depths))) - 1 
     depth_threshold = int(sorted_depths.iloc[sample_loss_index])
 
-    #knee_points = [None] * num_samples
-    #s = 0
-    #df_list = []
     artifacts_list = []
     sample_list = table_df.index.tolist()
     depths_list = []
@@ -130,60 +120,20 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
         max_range = np.linspace(min_depth, reads_per_sample.loc[sample], num=steps, dtype=int)
         depths_list.append(max_range.tolist())
 
-        #array_sample = np.empty(steps)
-
-        #sample_values = table_df.loc[sample].values	
         # Create a new DataFrame with only the current sample
         current_sample_df = table_df.loc[[sample]]
 
         for i in range(steps):
-            print("before alpha_action")
+            print(f"sample: {sample}")
             #subsample so there's only the current sample in the table
             table_artifact = Artifact.import_data('FeatureTable[Frequency]', current_sample_df)
             result, = alpha_action(table=table_artifact, sampling_depth=int(max_range[i]), metric='observed_features', n=iterations, replacement=False, average_method='mean')
             artifacts_list.append(result)
 
-            """metadata = result.view(qiime2.Metadata)
-            rarefied_sample = metadata.to_dataframe()"""
-            #rarefied_sample = rarefy(sample_values, temp, j, seed)
-            
-            #array_sample[i] = rarefied_sample.loc[sample, "observed_features"]#rarefied_sample[sample] 
-            #pass list of artifacts to visualizer
-        
-        """sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample, 'sample': sample})
-        df_list.append(sample_df)
-        if(algorithm.lower().strip() == 'kneedle'):
-            #using KneeLocator to find the knee point 
-            kneedle = KneeLocator(max_range, array_sample, curve="concave", direction="increasing")
-            knee_points[s] = kneedle.knee
-        else:
-            #using the gradient method
-            curr_array = array_sample
-            first_derivative = np.gradient(curr_array, max_range)
-            second_derivative = np.gradient(first_derivative, max_range)
-            max_index = np.argmax(second_derivative)
-            knee_points[s] = max_range[max_index]
 
-        s += 1"""
-
-    #combined_df = pd.concat(df_list, ignore_index=True)
     print("after rf loop")
-    temp_dir = '/home/andrea/automated-rarefaction-depth/result/'
     depths_list = [depth for sublist in depths_list for depth in sublist]
     
-    #converted_artifacts = [artifact.view(qiime2.Metadata).to_dataframe for artifact in artifacts_list]
-    #artifacts_list = [artifact if isinstance(artifact, qiime2.Artifact) else qiime2.Artifact.load(str(artifact)) for artifact in artifacts_list]
-    """for artifact in artifacts_list:
-        print(type(artifact))
-        print(artifact)
-        alpha_diversity_df = artifact.view(qiime2.Metadata).to_dataframe()
-        print(alpha_diversity_df)"""
-    #artifacts_list_ad = [artifact.view(SampleData[AlphaDiversity]) for artifact in artifacts_list]
-    """artifacts_list_a = [artifact.view(pd.Series) for artifact in artifacts_list]
-    print("after converting to pd.Series")
-    artifacts_list_ad = [artifact.view(pd.DataFrame) for artifact in artifacts_list_a]"""
-    
-
     #trying new approach because nothing else works
     for i, artifact in enumerate(artifacts_list):
         print(f"Exporting artifact {i}")
@@ -197,47 +147,25 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
         dfs.append(df)
     
 
-    # If you want a single DataFrame
     final_df = pd.concat(dfs, axis=0)
-    print("final_df:")
-    print(final_df)
-    print(final_df.shape)
-    print(final_df.columns)
-    print(final_df.index)
-    print(final_df.dtypes)
 
-    #making a new df
     pd_new = pd.DataFrame(
-        np.nan,  # Use np.nan or another default value
-        index=[sample_list[i] for i in range(table_size)],  # Sample names
-        columns=[f"Step_{j+1}" for j in range(steps)]  # Step names
+        np.nan,  
+        index=[sample_list[i] for i in range(table_size)],  
+        columns=[f"Step_{j+1}" for j in range(steps)]  
     )
     final_df = final_df.reset_index(drop=True)
-    print("final_df after resetting index:")
-    print(final_df)
-    print(final_df.index)
+
     for i in range(table_size):
         for j in range(steps):
             pd_new.iloc[i, j] = final_df.iloc[(i*steps) + j]
     pd_new = pd_new.round().astype(int)
-    print("pd_new:")
-    print(pd_new)
-    print(pd_new.shape)
-    print(pd_new.columns)
-    print(pd_new.index)
-    print(pd_new.dtypes)
-    print(type(pd_new))
+    
 
     artifact_ft = df_to_feature_table(pd_new)
     print("artifact_ft:")
     print(artifact_ft)
-    print(type(artifact_ft))
-    print(artifact_ft.type)
-    """artifact_ft_new = Artifact.import_data("FeatureTable[Frequency]", pd_new)
-    print("artifact_ft_new:")
-    print(artifact_ft_new)
-    print(type(artifact_ft_new))"""
-
+    
     visualization, = viz_action( percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, artifacts_list=artifact_ft, #output_dir=temp_dir,
                    sorted_depths=sorted_depths_pass, max_reads=int(max_reads), depth_threshold=int(depth_threshold), sample_list=sample_list, depths_list=depths_list, steps=int(steps), algorithm=algorithm)
     print("after calling rf_visualizer")
@@ -265,12 +193,7 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
     
     print("in rf_visualizer")
     print("artifacts_list type:", type(artifacts_list))
-    print(artifacts_list)
-    print(artifacts_list.shape)
-    print(artifacts_list.columns)
-    print(artifacts_list.index)
-    print(artifacts_list.dtypes)
-    
+  
 
     sorted_depths = pd.Series(sorted_depths)
     if isinstance(reads_per_sample, list):
@@ -285,7 +208,6 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
     print(pd_list)
     print(pd_list.shape)  
 
-    #change depths_list has new type now, not list of list anymore, just a single list
 
     for sample in sample_list:
         max_range = np.array(depths_list[counter*steps : (counter + 1) * steps]) #check if correct!!
@@ -515,19 +437,13 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
         titleFontSize=14   
     )
    
-    # Check if the file already exists and delete it if it does
-    """output_dir_n = os.path.join(output_dir, 'q2templateassets')
-    if os.path.exists(output_dir_n):
-        shutil.rmtree(output_dir_n)"""
-    output_dir_n = output_dir
+    #change names + delete this statement
+    output_dir_n = output_dir # !!!!
 
     new_chart_path = os.path.join(output_dir, 'new_chart.html') 
     if os.path.exists(new_chart_path):
         os.remove(new_chart_path)
 
-    print(new_chart_path)
-    #for debug purposes
-    #combined_chart.save("/home/andrea/automated-rarefaction-depth/result/combined_chart.html", embed_options={'actions': False})
     combined_chart.save(new_chart_path, inline=True)
     change_html_file(new_chart_path)
     
