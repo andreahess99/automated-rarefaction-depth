@@ -67,11 +67,11 @@ def change_html_file(file_path: str) -> None:
 
 _pipe_defaults = {
     'seed': 42,
-    'iterations': 2, #10
+    'iterations': 1, #10
     'table_size': None,
-    'steps': 5, #20
+    'steps': 20, #20
     'percent_samples': 0.8,
-    'algorithm': 'gradient'
+    'algorithm': 'kneedle'
 }
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -79,6 +79,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm']):#output_dir: str,
     print("started!")
+    start_time = time.time()
     alpha_action = ctx.get_action('boots', 'alpha')
     viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer')
     print(inspect.signature(viz_action))
@@ -93,10 +94,10 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
     
 
     #adjusting table size if it's too big -> keep table_size rows
-
     if (table_size is not None and len(table_df) > table_size):
         table_df = table_df.sample(n=table_size, random_state=seed) 
         table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
+    table_size = len(table_df)
 
     reads_per_sample = table_df.sum(axis=1) 
     max_reads = reads_per_sample.max()
@@ -114,7 +115,6 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
     sample_list = table_df.index.tolist()
     depths_list = []
 
-    print("before loop to calculate rf")
     #go through every sample and calculate the observed features for each depth
     for sample in table_df.index:
         max_range = np.linspace(min_depth, reads_per_sample.loc[sample], num=steps, dtype=int)
@@ -131,18 +131,13 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
             artifacts_list.append(result)
 
 
-    print("after rf loop")
     depths_list = [depth for sublist in depths_list for depth in sublist]
     
     #trying new approach because nothing else works
     for i, artifact in enumerate(artifacts_list):
-        print(f"Exporting artifact {i}")
-        print(artifact.type)
-        print(artifact.format)
         artifact.export_data(f'output_directory_{i}')  # Export each artifact
     dfs = []
     for i in range(len(artifacts_list)):
-        print(f"Reading artifact {i}")
         df = pd.read_csv(f'output_directory_{i}/alpha-diversity.tsv', sep='\t', index_col=0)
         dfs.append(df)
     
@@ -182,7 +177,11 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
         # Remove the output directory
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
-    print("after cleaning up")
+
+    #measuring time
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"Pipeline execution time: {elapsed_time:.2f} seconds")
 
     return visualization
     
@@ -194,10 +193,8 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
     print("in rf_visualizer")
     print("artifacts_list type:", type(artifacts_list))
   
-
     sorted_depths = pd.Series(sorted_depths)
     if isinstance(reads_per_sample, list):
-        print("reads_per_sample is a list")
         reads_per_sample = pd.DataFrame(reads_per_sample)
 
     counter = 0
@@ -213,13 +210,8 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
         max_range = np.array(depths_list[counter*steps : (counter + 1) * steps]) #check if correct!!
         array_sample = np.array(pd_list.iloc[counter])
 
-        print(f"array_sample shape: {(array_sample)}")
         array_sample = array_sample.flatten()
         sample = np.full(len(max_range), sample)  # Create an array of repeated values
-
-        print(f"max_range shape: {np.shape(max_range)}")
-        print(f"array_sample shape: {np.shape(array_sample)}")
-        print(f"sample shape: {np.shape(sample)}")
 
         sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample, 'sample': sample})
         df_list.append(sample_df)
@@ -237,7 +229,6 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
 
         counter += 1
 
-    print("after knee points calculations")
     combined_df = pd.concat(df_list, ignore_index=True)
     
     knee_points_filtered = [point for point in knee_points if point is not None]

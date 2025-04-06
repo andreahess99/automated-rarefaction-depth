@@ -32,7 +32,9 @@ plugin = Plugin(
     citations=citations 
 )
  
-
+#output_descriptions={
+  #      'visualization': 'Visualization including the calculated rarefaction depth, rarefaction curves plot and histogram of reads.'
+  #  },
 
 plugin.visualizers.register_function(
     function=automated_rarefaction_depth.rarefaction_depth,
@@ -45,13 +47,13 @@ plugin.visualizers.register_function(
                 'algorithm': Str % Choices("kneedle", "gradient")},
     input_descriptions={
         'table': ('Feature table to compute rarefaction curves from.')
-    },
+    }, 
     parameter_descriptions={
-        'seed': 'The seed used for random number generation.',
+        'seed': 'The seed used for the random subsampling.',
         'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
         'iterations': 'The number of times each sample gets rarefied at each depth, a positive number below 100.',
         'table_size': 'The number of samples to keep in the feature table, a positive number.',
-        'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',
+        'steps': 'The number of points each sample is evaluated at when making the rarefaction curves, choose a number between 5 and 100.',
         'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.'
     },
     name='Automated Rarefaction Depth',
