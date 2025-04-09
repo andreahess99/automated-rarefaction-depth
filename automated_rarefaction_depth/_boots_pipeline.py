@@ -71,23 +71,22 @@ _pipe_defaults = {
     'table_size': None,
     'steps': 20, #20
     'percent_samples': 0.8,
-    'algorithm': 'kneedle'
+    'algorithm': 'gradient'
 }
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
  
-
-#runs but is slow
-def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
+#change so that the same depths are used for all samples -> only run boots alpha once
+#linearly space according to the highest number of reads a sample has
+def pipeline_boots(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm']):#output_dir: str,
     print("started!")
     start_time = time.time()
     alpha_action = ctx.get_action('boots', 'alpha')
-    viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer')
-    print(inspect.signature(viz_action))
+    viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
 
-    min_depth = 1
     table_df = table.view(pd.DataFrame)
+    print(len(table_df))
 
     if table_df.empty:
         raise ValueError("The feature table is empty.")
@@ -104,6 +103,8 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
     reads_per_sample = table_df.sum(axis=1) 
     max_reads = reads_per_sample.max()
     sorted_depths = reads_per_sample.sort_values() 
+    print("sorted_depths:")
+    print(sorted_depths)
 
     sorted_depths_pass = sorted_depths.tolist()
     sorted_depths_pass = [int(depth) for depth in sorted_depths_pass]
@@ -115,25 +116,20 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
 
     artifacts_list = []
     sample_list = table_df.index.tolist()
-    depths_list = []
 
-    #go through every sample and calculate the observed features for each depth
-    for sample in table_df.index:
-        max_range = np.linspace(min_depth, reads_per_sample.loc[sample], num=steps, dtype=int)
-        depths_list.append(max_range.tolist())
+    max_range = np.linspace(1, max_reads, num=steps, dtype=int)
+    table_artifact = Artifact.import_data('FeatureTable[Frequency]', table_df)
 
-        # Create a new DataFrame with only the current sample
-        current_sample_df = table_df.loc[[sample]]
+    for i in range(steps):
+        print(f"step: {max_range[i]}")   
+        result, = alpha_action(table=table_artifact, sampling_depth=int(max_range[i]), metric='observed_features', n=iterations, replacement=False, average_method='mean')
+        artifacts_list.append(result)
 
-        for i in range(steps):
-            print(f"sample: {sample}")
-            #subsample so there's only the current sample in the table
-            table_artifact = Artifact.import_data('FeatureTable[Frequency]', current_sample_df)
-            result, = alpha_action(table=table_artifact, sampling_depth=int(max_range[i]), metric='observed_features', n=iterations, replacement=False, average_method='mean')
-            artifacts_list.append(result)
-
-
-    depths_list = [depth for sublist in depths_list for depth in sublist]
+    pd_new = pd.DataFrame(
+        np.nan,  
+        index=[sample_list[i] for i in range(table_size)],  
+        columns=[f"Step_{j+1}" for j in range(steps)]  
+    )
     
     #trying new approach because nothing else works
     for i, artifact in enumerate(artifacts_list):
@@ -142,41 +138,28 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
     for i in range(len(artifacts_list)):
         df = pd.read_csv(f'output_directory_{i}/alpha-diversity.tsv', sep='\t', index_col=0)
         dfs.append(df)
-    
+        for j, sample in enumerate(sample_list):
+            if sample in df.index:
+                pd_new.iloc[j, i] = df.loc[sample].values[0].round().astype(int)
+            else:
+                pd_new.iloc[j, i] = np.nan
 
     final_df = pd.concat(dfs, axis=0)
-
-    pd_new = pd.DataFrame(
-        np.nan,  
-        index=[sample_list[i] for i in range(table_size)],  
-        columns=[f"Step_{j+1}" for j in range(steps)]  
-    )
     final_df = final_df.reset_index(drop=True)
-
-    for i in range(table_size):
-        for j in range(steps):
-            pd_new.iloc[i, j] = final_df.iloc[(i*steps) + j]
-    pd_new = pd_new.round().astype(int)
-    
-
+  
     artifact_ft = df_to_feature_table(pd_new)
-    print("artifact_ft:")
-    print(artifact_ft)
-    
-    visualization, = viz_action( percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, artifacts_list=artifact_ft, #output_dir=temp_dir,
-                   sorted_depths=sorted_depths_pass, max_reads=int(max_reads), depth_threshold=int(depth_threshold), sample_list=sample_list, depths_list=depths_list, steps=int(steps), algorithm=algorithm)
-    print("after calling rf_visualizer")
 
+    visualization, = viz_action( percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, artifacts_list=artifact_ft, steps=int(steps),
+                    sorted_depths=sorted_depths_pass, max_reads=int(max_reads), depth_threshold=int(depth_threshold), sample_list=sample_list, algorithm=algorithm)
+  
     # Clean up the exported directories and files
     for i in range(len(artifacts_list)):
         dir_path = f'output_directory_{i}'
         file_path = os.path.join(dir_path, 'alpha-diversity.tsv')
         
-        # Remove the alpha-diversity.tsv file
+        # Remove files & directories if they exist
         if os.path.exists(file_path):
             os.remove(file_path)
-        
-        # Remove the output directory
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
 
@@ -190,8 +173,7 @@ def pipeline_test_new(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_
 
 
 
-def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: pd.DataFrame, sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], depths_list: list[int], steps: int, algorithm: str)-> None:
-    
+def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: pd.DataFrame, sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], steps: int, algorithm: str)-> None: 
     print("in rf_visualizer")
     print("artifacts_list type:", type(artifacts_list))
   
@@ -206,19 +188,18 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
     print("pd_list:")
     print(pd_list)
     print(pd_list.shape)  
-
-
+    
+    #change -> don't have to make the table -> already contains everything needed
+    max_range = np.linspace(1, max_reads, num=steps, dtype=int)
     for sample in sample_list:
-        max_range = np.array(depths_list[counter*steps : (counter + 1) * steps]) #check if correct!!
         array_sample = np.array(pd_list.iloc[counter])
 
         array_sample = array_sample.flatten()
         sample = np.full(len(max_range), sample)  # Create an array of repeated values
 
         sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample, 'sample': sample})
-        print("sample_df:")
-        print(sample_df)
         df_list.append(sample_df)
+    
         if(algorithm.lower().strip() == 'kneedle'):
             #using KneeLocator to find the knee point 
             kneedle = KneeLocator(max_range, array_sample, curve="concave", direction="increasing")
@@ -244,7 +225,7 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
     print("knee_points:")
     print(knee_points)
    
-
+    
     #finding +-5% points & at what percentile knee point is
     index = np.searchsorted(sorted_depths, knee_point)
     percentile = (index / len(sorted_depths)) * 100
@@ -464,4 +445,3 @@ def _rf_visualizer(output_dir: str, percent_samples: float, reads_per_sample: li
   
     q2templates.render(templates, output_dir_n, context=tabbed_context)
     
-
