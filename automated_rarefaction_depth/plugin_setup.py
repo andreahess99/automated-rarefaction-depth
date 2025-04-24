@@ -14,9 +14,11 @@ import q2_diversity
 from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.sample_data import AlphaDiversity, SampleData
 from q2_types.tree import Phylogeny, Rooted
+from q2_types.feature_data import (FeatureData, Sequence, RNASequence, ProteinSequence)
 from automated_rarefaction_depth import __version__
 from automated_rarefaction_depth._pipeline import pipeline_test_new, _rf_visualizer
 from automated_rarefaction_depth._boots_pipeline import pipeline_boots, _rf_visualizer_boots
+from automated_rarefaction_depth._kmerizer_pipeline import pipeline_kmerizer
 import qiime2
 import pandas as pd
 
@@ -121,7 +123,7 @@ plugin.visualizers.register_function(
     citations=citations,
 )
 
-#registered the new pipeline
+#registered the boots pipeline (same depths for all samples)
 plugin.pipelines.register_function(
     function=pipeline_boots,
     inputs={'table': FeatureTable[Frequency]},
@@ -176,5 +178,35 @@ plugin.visualizers.register_function(
     },
     name='Automated Rarefaction Depth',
     description=("Automatically computes an optimal rarefaction depth."),
+    citations=citations,
+)
+
+#kmerizer pipeline
+plugin.pipelines.register_function(
+    function=pipeline_kmerizer,
+    inputs={'table': FeatureTable[Frequency],
+            'sequence': FeatureData[Sequence]},
+    outputs={'visualization': Visualization},
+    parameters={'seed': Int % Range(1, None),
+                'percent_samples': Float % Range(0, 1),
+                'iterations': Int % Range(1, 100),
+                'table_size': Int % Range(1, None),
+                'steps': Int % Range(5, 100),
+                'algorithm': Str % Choices("kneedle", "gradient")},
+    parameter_descriptions={'seed': 'The seed used for random number generation.',
+        'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
+        'iterations': 'The number of times each sample gets rarefied at each depth, a positive number below 100.',
+        'table_size': 'The number of samples to keep in the feature table, a positive number.',
+        'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',
+        'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.'},
+    input_descriptions={
+        'table': ('Feature table to compute rarefaction curves from.'),
+        'sequence': ('Containes the sequences of the features in the feature table.')
+    },
+    output_descriptions={
+        'visualization': 'Visualization of the optimal rarefaction depth.'
+    },
+    name='Automated Rarefaction Depth Pipeline',
+    description=("Automatically computes an optimal rarefaction depth using q2-boots."),
     citations=citations,
 )

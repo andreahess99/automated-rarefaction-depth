@@ -80,10 +80,11 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 #boots and diversity pipeline
 #change so that the same depths are used for all samples -> only run boots alpha once
 #linearly space according to the highest number of reads a sample has
-def pipeline_boots(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
+def pipeline_kmerizer(ctx, table, sequence, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm']):
     start_time = time.time()
     alpha_action = ctx.get_action('boots', 'alpha')
+    #change this to this files visualizer??
     viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
 
     table_df = table.view(pd.DataFrame)
@@ -178,7 +179,8 @@ def pipeline_boots(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_def
     
 
 
-
+#does this have to change or can I use the same as in the boots pipeline?
+#if it's the same, call it from the other file and delete this one
 def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: pd.DataFrame, sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], steps: int, algorithm: str)-> None: 
     print("in rf_visualizer")
     print("artifacts_list type:", type(artifacts_list))
@@ -207,7 +209,9 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
         df_list.append(sample_df)
     
         if(algorithm.lower().strip() == 'kneedle'):
-            #using KneeLocator to find the knee point
+            #using KneeLocator to find the knee point 
+            #could add S parameter (sensitivity) to the kneelocator (large values more conservative, smaller ones detect knees quicker)
+            #also try online=True parameter
             #kneedle = KneeLocator(max_range, array_sample, curve="concave", direction="increasing")
             kneedle = KneeLocator(max_range, array_sample, curve="concave", direction="increasing", S=3)
             knee_points[counter] = kneedle.knee
