@@ -29,6 +29,8 @@ import inspect
 import warnings
 import numbers
 from biom import Table
+import skbio
+
 
 
 
@@ -72,8 +74,7 @@ _pipe_defaults = {
     'table_size': None,
     'steps': 20, #20
     'percent_samples': 0.8,
-    'algorithm': 'kneedle',
-    'function': 'diversity'
+    'algorithm': 'kneedle'
 }
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -81,11 +82,10 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 #boots and diversity pipeline
 #change so that the same depths are used for all samples -> only run boots alpha once
 #linearly space according to the highest number of reads a sample has
-def pipeline_boots(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
-                   steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
-                   function=_pipe_defaults['function']):
+def pipeline_diversity(ctx, table, metadata, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
+                   steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm']):
     start_time = time.time()
-    alpha_action = ctx.get_action('boots', 'alpha')
+    #alpha_action = ctx.get_action('boots', 'alpha')
     viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
     div_action = ctx.get_action('diversity', 'core_metrics')
 
@@ -130,18 +130,12 @@ def pipeline_boots(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_def
     table_artifact = Artifact.import_data('FeatureTable[Frequency]', table_df)
     
     #new option to choose function
-    if function == 'diversity':
-        """for i in range(steps):
-            print(f"step: {max_range[i]}")   
-            _, result, = div_action(table=table_artifact, sampling_depth=int(max_range[i]), with_replacement=False, metadata=metadata)
-            print("result:")
-            print(result)
-            artifacts_list.append(result)"""
-    else:
-        for i in range(steps):
-            print(f"step: {max_range[i]}")   
-            result, = alpha_action(table=table_artifact, sampling_depth=int(max_range[i]), metric='observed_features', n=iterations, replacement=False, average_method='mean')
-            artifacts_list.append(result)
+    for i in range(steps):
+        print(f"step: {max_range[i]}")   
+        _, result, = div_action(table=table_artifact, sampling_depth=int(max_range[i]), with_replacement=False, metadata=metadata)
+        print("result:")
+        print(result)
+        artifacts_list.append(result)
 
     pd_new = pd.DataFrame(
         np.nan,  
