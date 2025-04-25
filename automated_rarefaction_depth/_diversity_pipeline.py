@@ -29,7 +29,6 @@ import inspect
 import warnings
 import numbers
 from biom import Table
-import skbio
 
 
 
@@ -132,7 +131,7 @@ def pipeline_diversity(ctx, table, metadata, seed=_pipe_defaults['seed'], iterat
     #new option to choose function
     for i in range(steps):
         print(f"step: {max_range[i]}")   
-        _, result, = div_action(table=table_artifact, sampling_depth=int(max_range[i]), with_replacement=False, metadata=metadata)
+        result = div_action(table=table_artifact, sampling_depth=int(max_range[i]), with_replacement=False, metadata=metadata)[1]
         print("result:")
         print(result)
         artifacts_list.append(result)
@@ -185,7 +184,7 @@ def pipeline_diversity(ctx, table, metadata, seed=_pipe_defaults['seed'], iterat
 
 
 
-def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: pd.DataFrame, sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], steps: int, algorithm: str)-> None: 
+"""def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: pd.DataFrame, sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], steps: int, algorithm: str)-> None: 
     print("in rf_visualizer")
     print("artifacts_list type:", type(artifacts_list))
   
@@ -456,5 +455,5 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
         dirs_exist_ok=True
     )
   
-    q2templates.render(templates, output_dir_n, context=tabbed_context)
+    q2templates.render(templates, output_dir_n, context=tabbed_context)"""
     

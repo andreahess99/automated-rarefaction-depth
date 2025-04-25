@@ -80,10 +80,11 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 #boots and diversity pipeline
 #change so that the same depths are used for all samples -> only run boots alpha once
 #linearly space according to the highest number of reads a sample has
-def pipeline_kmerizer(ctx, table, sequence, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
+def pipeline_kmerizer(ctx, table, sequence, metadata, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm']):
     start_time = time.time()
-    alpha_action = ctx.get_action('boots', 'alpha')
+    #alpha_action = ctx.get_action('boots', 'alpha')
+    kmerizer_action = ctx.get_action('kmerizer', 'core_metrics')
     #change this to this files visualizer??
     viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
 
@@ -129,7 +130,7 @@ def pipeline_kmerizer(ctx, table, sequence, seed=_pipe_defaults['seed'], iterati
 
     for i in range(steps):
         print(f"step: {max_range[i]}")   
-        result, = alpha_action(table=table_artifact, sampling_depth=int(max_range[i]), metric='observed_features', n=iterations, replacement=False, average_method='mean')
+        result = kmerizer_action(table=table_artifact, sampling_depth=int(max_range[i]), sequences=sequence, with_replacement=False, metadata=metadata)[2]
         artifacts_list.append(result)
 
     pd_new = pd.DataFrame(
