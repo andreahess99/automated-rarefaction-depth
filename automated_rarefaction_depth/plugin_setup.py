@@ -10,18 +10,15 @@ import automated_rarefaction_depth
 from qiime2.plugin import (Plugin, Str, Properties, Choices, Int, Bool, Range,
                            Float, Set, Visualization, Metadata, MetadataColumn,
                            Categorical, Numeric, Citations, Threads, List)
-import q2_diversity
 from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.sample_data import AlphaDiversity, SampleData
-from q2_types.tree import Phylogeny, Rooted
+#from q2_types.tree import Phylogeny, Rooted
 from q2_types.feature_data import (FeatureData, Sequence, RNASequence, ProteinSequence)
 from automated_rarefaction_depth import __version__
 from automated_rarefaction_depth._pipeline import pipeline_test_new, _rf_visualizer
 from automated_rarefaction_depth._boots_pipeline import pipeline_boots, _rf_visualizer_boots
 from automated_rarefaction_depth._kmerizer_pipeline import pipeline_kmerizer
 from automated_rarefaction_depth._diversity_pipeline import pipeline_diversity
-import qiime2
-import pandas as pd
 
 
 citations = Citations.load("citations.bib", package="automated_rarefaction_depth")
@@ -62,6 +59,7 @@ plugin.visualizers.register_function(
     description=("Automatically computes an optimal rarefaction depth. Outputs a visualization with the rarefaction curves, the optimal rarefaction depth and a histogram of the reads per sample."),
     citations=citations,
 )
+
 
 
 
@@ -129,14 +127,12 @@ plugin.pipelines.register_function(
     function=pipeline_boots,
     inputs={'table': FeatureTable[Frequency]},
     outputs={'visualization': Visualization},
-    parameters={'seed': Int % Range(1, None),
-                'percent_samples': Float % Range(0, 1),
+    parameters={'percent_samples': Float % Range(0, 1),
                 'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
                 'steps': Int % Range(5, 100),
                 'algorithm': Str % Choices("kneedle", "gradient")},
-    parameter_descriptions={'seed': 'The seed used for random number generation.',
-        'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
+    parameter_descriptions={'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
         'iterations': 'The number of times each sample gets rarefied at each depth, a positive number below 100.',
         'table_size': 'The number of samples to keep in the feature table, a positive number.',
         'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',
@@ -188,15 +184,13 @@ plugin.pipelines.register_function(
     inputs={'table': FeatureTable[Frequency],
             'sequence': FeatureData[Sequence]},
     outputs={'visualization': Visualization},
-    parameters={'seed': Int % Range(1, None),
-                'percent_samples': Float % Range(0, 1),
+    parameters={'percent_samples': Float % Range(0, 1),
                 'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
                 'steps': Int % Range(5, 100),
                 'algorithm': Str % Choices("kneedle", "gradient"),
                 'metadata': Metadata},
-    parameter_descriptions={'seed': 'The seed used for random number generation.',
-        'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
+    parameter_descriptions={'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
         'iterations': 'The number of times each sample gets rarefied at each depth, a positive number below 100.',
         'table_size': 'The number of samples to keep in the feature table, a positive number.',
         'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',
@@ -218,15 +212,13 @@ plugin.pipelines.register_function(
     function=pipeline_diversity,
     inputs={'table': FeatureTable[Frequency]},
     outputs={'visualization': Visualization},
-    parameters={'seed': Int % Range(1, None),
-                'percent_samples': Float % Range(0, 1),
+    parameters={'percent_samples': Float % Range(0, 1),
                 'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
                 'steps': Int % Range(5, 100),
                 'algorithm': Str % Choices("kneedle", "gradient"),
                 'metadata': Metadata},
-    parameter_descriptions={'seed': 'The seed used for random number generation.',
-        'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
+    parameter_descriptions={'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
         'iterations': 'The number of times each sample gets rarefied at each depth, a positive number below 100.',
         'table_size': 'The number of samples to keep in the feature table, a positive number.',
         'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',

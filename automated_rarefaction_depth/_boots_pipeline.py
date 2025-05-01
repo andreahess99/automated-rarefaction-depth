@@ -17,17 +17,14 @@ from qiime2 import Artifact, sdk
 from kneed import KneeLocator
 import altair as alt
 import time
-import tracemalloc
 from shutil import copytree
 import shutil
 from bs4 import BeautifulSoup
-from tempfile import TemporaryDirectory
-from qiime2.plugin import Visualization
-from q2_types.feature_table import FeatureTable, Frequency
-from q2_types.sample_data import AlphaDiversity, SampleData
-import inspect
+#from tempfile import TemporaryDirectory
+#from qiime2.plugin import Visualization
+#from q2_types.feature_table import FeatureTable, Frequency
+#from q2_types.sample_data import AlphaDiversity, SampleData
 import warnings
-import numbers
 from biom import Table
 
 
@@ -67,7 +64,6 @@ def change_html_file(file_path: str) -> None:
 
 
 _pipe_defaults = {
-    'seed': 42,
     'iterations': 1, #10
     'table_size': None,
     'steps': 20, #20
@@ -80,7 +76,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 #boots and diversity pipeline
 #change so that the same depths are used for all samples -> only run boots alpha once
 #linearly space according to the highest number of reads a sample has
-def pipeline_boots(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
+def pipeline_boots(ctx, table, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm']):
     start_time = time.time()
     alpha_action = ctx.get_action('boots', 'alpha')
@@ -98,7 +94,7 @@ def pipeline_boots(ctx, table, seed=_pipe_defaults['seed'], iterations=_pipe_def
 
     #adjusting table size if it's too big -> keep table_size rows
     if (table_size is not None and len(table_df) > table_size):
-        table_df = table_df.sample(n=table_size, random_state=seed) 
+        table_df = table_df.sample(n=table_size, random_state=42) 
         table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
     table_size = len(table_df)
 
