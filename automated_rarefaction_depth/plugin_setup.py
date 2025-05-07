@@ -125,18 +125,45 @@ plugin.visualizers.register_function(
 #registered the boots pipeline (same depths for all samples)
 plugin.pipelines.register_function(
     function=pipeline_boots,
-    inputs={'table': FeatureTable[Frequency]},
+    inputs={'table': FeatureTable[Frequency],
+            'sequence': FeatureData[Sequence]},
     outputs={'visualization': Visualization},
     parameters={'percent_samples': Float % Range(0, 1),
                 'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
                 'steps': Int % Range(5, 100),
-                'algorithm': Str % Choices("kneedle", "gradient")},
+                'algorithm': Str % Choices("kneedle", "gradient"),
+                'kmer_size': Int,
+                'tfidf': Bool,
+                'max_df': Float % Range(0, 1, inclusive_start=True,
+                            inclusive_end=True) | Int,
+                'min_df': Float % Range(0, 1, inclusive_start=True,
+                            inclusive_end=False) | Int,
+                'max_features': Int,
+                'norm': Str % Choices(['None', 'l1', 'l2']) },
     parameter_descriptions={'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
         'iterations': 'The number of times each sample gets rarefied at each depth, a positive number below 100.',
         'table_size': 'The number of samples to keep in the feature table, a positive number.',
         'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',
-        'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.'},
+        'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.',
+        'kmer_size': 'Only needed for kmerizer! Length of kmers to generate.',
+        'tfidf': 'Only needed for kmerizer! If True, kmers will be scored using TF-IDF and output '
+             'frequencies will be weighted by scores. If False, kmers are '
+             'counted without TF-IDF scores.',
+        'max_df': 'Only needed for kmerizer! Ignore kmers that have a frequency strictly higher than '
+              'the given threshold. If float, the parameter represents a '
+              'proportion of sequences, if an integer it represents an '
+              'absolute count.',
+        'min_df': 'Only needed for kmerizer! Ignore kmers that have a frequency strictly lower than '
+              'the given threshold. If float, the parameter represents a '
+              'proportion of sequences, if an integer it represents an '
+              'absolute count.',
+        'max_features': 'Only needed for kmerizer! If not None, build a vocabulary that only considers '
+                    'the top max_features ordered by frequency (or TF-IDF '
+                    'score).',
+        'norm': 'Only needed for kmerizer! Normalization procedure applied to TF-IDF scores. Ignored '
+            'if tfidf=False. l2: Sum of squares of vector elements is 1. '
+            'l1: Sum of absolute values of vector elements is 1.'},
     input_descriptions={
         'table': ('Feature table to compute rarefaction curves from.')
     },

@@ -64,11 +64,17 @@ def change_html_file(file_path: str) -> None:
 
 
 _pipe_defaults = {
-    'iterations': 1, #10
+    'iterations': 10, #10
     'table_size': None,
     'steps': 20, #20
     'percent_samples': 0.8,
-    'algorithm': 'kneedle'
+    'algorithm': 'kneedle',
+    'kmer_size': 16,
+    'tfidf': False,
+    'max_df': 1.0,
+    'min_df': 1,
+    'max_features': None,
+    'norm': 'None'
 }
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -76,20 +82,37 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 #boots and diversity pipeline
 #change so that the same depths are used for all samples -> only run boots alpha once
 #linearly space according to the highest number of reads a sample has
-def pipeline_boots(ctx, table, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
-                   steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm']):
+def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
+                   steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
+                   kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
+                   min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm']):
     start_time = time.time()
     alpha_action = ctx.get_action('boots', 'alpha')
+    kmer_action = ctx.get_action('kmerizer', 'seqs_to_kmers')
     viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
-    #div_action = ctx.get_action('diversity', 'core_metrics')
 
     table_df = table.view(pd.DataFrame)
     print(len(table_df))
+    table_artifact = Artifact.import_data('FeatureTable[Frequency]', table_df)
 
     if table_df.empty:
         raise ValueError("The feature table is empty.")
     if not np.issubdtype(table_df.values.dtype, np.number):
         raise ValueError("The feature table contains non-numerical values.")
+    
+    #run seqs_to_kmers if sequence and metadata are provided
+    if sequence is not None:
+        print("sequences were provided")
+        print("kmerizer is run")
+        kmer_artifact, = kmer_action(table=table_artifact, sequences=sequence, kmer_size=kmer_size, tfidf=tfidf, max_df=max_df, min_df=min_df, max_features=max_features, norm=norm)
+        table_artifact = kmer_artifact
+        table_df = table_artifact.view(pd.DataFrame)
+        print("table_df:")
+        print(table_df)
+        print("Feature Table generated from kmer sequences will be used for the analysis")
+    else:
+        print("no sequences were provided")
+        print("kmerizer is not run")
     
 
     #adjusting table size if it's too big -> keep table_size rows
@@ -121,8 +144,6 @@ def pipeline_boots(ctx, table, iterations=_pipe_defaults['iterations'], table_si
     sample_list = table_df.index.tolist()
 
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
-    table_artifact = Artifact.import_data('FeatureTable[Frequency]', table_df)
-    
     
     for i in range(steps):
         print(f"step: {max_range[i]}")   
