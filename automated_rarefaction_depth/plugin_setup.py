@@ -185,7 +185,8 @@ plugin.visualizers.register_function(
                 'depth_threshold': Int % Range(1, None),
                 'sample_list': List[Str],
                 'steps': Int % Range(5, 100),
-                'algorithm': Str % Choices("kneedle", "gradient")
+                'algorithm': Str % Choices("kneedle", "gradient"),
+                'kmer_run': Bool
                 },
     input_descriptions={
         'artifacts_list': 'A set of .qza files containing AlphaDiversity artifacts.'
@@ -198,7 +199,8 @@ plugin.visualizers.register_function(
         'depth_threshold': 'The highest read_depth to still be within the accepted area.',
         'sample_list': 'The list of samples in the order they are processed.', 
         'steps': 'The number of depths that get evaluated for each sample.',
-        'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.'
+        'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.',
+        'kmer_run': 'True if the pipeline was run with kmerizer, False otherwise.'
     },
     name='Automated Rarefaction Depth',
     description=("Automatically computes an optimal rarefaction depth."),

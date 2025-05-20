@@ -68,7 +68,7 @@ _pipe_defaults = {
     'table_size': None,
     'steps': 20, #20
     'percent_samples': 0.8,
-    'algorithm': 'kneedle',
+    'algorithm': 'kneedle', 
     'kmer_size': 16,
     'tfidf': False,
     'max_df': 1.0,
@@ -79,9 +79,7 @@ _pipe_defaults = {
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
  
-#boots and diversity pipeline
-#change so that the same depths are used for all samples -> only run boots alpha once
-#linearly space according to the highest number of reads a sample has
+#boots and seqs_to_kmers pipeline
 def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
                    kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
@@ -101,18 +99,28 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
         raise ValueError("The feature table contains non-numerical values.")
     
     #run seqs_to_kmers if sequence and metadata are provided
+    kmer_run = False
     if sequence is not None:
         print("sequences were provided")
         print("kmerizer is run")
         kmer_artifact, = kmer_action(table=table_artifact, sequences=sequence, kmer_size=kmer_size, tfidf=tfidf, max_df=max_df, min_df=min_df, max_features=max_features, norm=norm)
         table_artifact = kmer_artifact
         table_df = table_artifact.view(pd.DataFrame)
+        kmer_run = True
         print("table_df:")
         print(table_df)
         print("Feature Table generated from kmer sequences will be used for the analysis")
     else:
         print("no sequences were provided")
         print("kmerizer is not run")
+        # Replace the word 'xxxx' with 'kmerizer' in the index.html file
+        #how to replace words in html file 
+        """index_html_path = os.path.join(os.path.dirname(__file__), "assets", "index.html")
+        with open(index_html_path, 'r') as file:
+            content = file.read()
+        content = content.replace('xxxx', 'kmerizer')
+        with open(index_html_path, 'w') as file:
+            file.write(content)"""
     
 
     #adjusting table size if it's too big -> keep table_size rows
@@ -174,7 +182,7 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
   
     artifact_ft = df_to_feature_table(pd_new)
 
-    visualization, = viz_action( percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, artifacts_list=artifact_ft, steps=int(steps),
+    visualization, = viz_action(kmer_run=kmer_run, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, artifacts_list=artifact_ft, steps=int(steps),
                     sorted_depths=sorted_depths_pass, max_reads=int(max_reads), depth_threshold=int(depth_threshold), sample_list=sample_list, algorithm=algorithm)
   
     # Clean up the exported directories and files
@@ -198,9 +206,8 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
 
 
 
-def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: pd.DataFrame, sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], steps: int, algorithm: str)-> None: 
+def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: pd.DataFrame, sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], steps: int, algorithm: str, kmer_run: bool)-> None: 
     print("in rf_visualizer")
-    print("artifacts_list type:", type(artifacts_list))
   
     sorted_depths = pd.Series(sorted_depths)
     if isinstance(reads_per_sample, list):
@@ -211,10 +218,8 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
     df_list = []
     pd_list = artifacts_list.transpose()
     print("pd_list:")
-    print(pd_list)
-    print(pd_list.shape)  
+    print(pd_list) 
     
-    #change -> don't have to make the table -> already contains everything needed
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
     for sample in sample_list:
         array_sample = np.array(pd_list.iloc[counter])
@@ -318,17 +323,28 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
     s = alt.param(
         name='position', bind=alt.binding_range(min=0, max=max_reads, step=20, name='Rarefaction Depth Line'), value=knee_point
     )
-
-    chart = alt.Chart(combined_df).mark_line(point=True).encode( #point=True means there are points on the line
-        x=alt.X('depth:Q', title='Read Depth'),
-        y=alt.Y('observed_features:Q', title='# Observed Features'),
-        color=alt.Color('sample:N', legend=None).scale(scheme='category10')  
-    ).add_params(
-        zoom,
-        param_checkbox
-    ).properties(
-        title='Rarefaction Curves'
-    )
+    if kmer_run:
+        chart = alt.Chart(combined_df).mark_line(point=True).encode( #point=True means there are points on the line
+            x=alt.X('depth:Q', title='Total Kmer Count'),
+            y=alt.Y('observed_features:Q', title='# Observed Distinct Kmers'),
+            color=alt.Color('sample:N', legend=None).scale(scheme='category10')  
+        ).add_params(
+            zoom,
+            param_checkbox
+        ).properties(
+            title='Rarefaction Curves'
+        )
+    else:
+        chart = alt.Chart(combined_df).mark_line(point=True).encode( #point=True means there are points on the line
+            x=alt.X('depth:Q', title='Read Depth'),
+            y=alt.Y('observed_features:Q', title='# Observed Features'),
+            color=alt.Color('sample:N', legend=None).scale(scheme='category10')  
+        ).add_params(
+            zoom,
+            param_checkbox
+        ).properties(
+            title='Rarefaction Curves'
+        )
 
     shaded_area = alt.Chart(pd.DataFrame({
         'x_min': [0],
@@ -399,23 +415,41 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
 
     #barplot of reads_per_sample
     predicate = alt.datum.reads_per_sample >= s 
-  
-    barplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
-        x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Reads per Sample'),
-        y=alt.Y('count()', title='# Samples'),
-        color=alt.value('steelblue')  
-    ).add_params(
-        s,
-        zoom
-    ).transform_filter(
-        predicate
-    ).transform_calculate(
-        position='position'
-    ).properties(
-        title='Histogram of Reads per Sample',
-        width=450,
-        height=350
-    )
+    
+    if kmer_run:
+        barplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
+            x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Kmers per Sample'),
+            y=alt.Y('count()', title='# Samples'),
+            color=alt.value('steelblue')  
+        ).add_params(
+            s,
+            zoom
+        ).transform_filter(
+            predicate
+        ).transform_calculate(
+            position='position'
+        ).properties(
+            title='Histogram of Kmers per Sample',
+            width=450,
+            height=350
+        )
+    else:
+        barplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
+            x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Reads per Sample'),
+            y=alt.Y('count()', title='# Samples'),
+            color=alt.value('steelblue')  
+        ).add_params(
+            s,
+            zoom
+        ).transform_filter(
+            predicate
+        ).transform_calculate(
+            position='position'
+        ).properties(
+            title='Histogram of Reads per Sample',
+            width=450,
+            height=350
+        )
 
     background = alt.Chart(reads_per_sample_df).mark_bar().encode(
         x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Reads per Sample'),  
@@ -440,9 +474,6 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
         labelFontSize=14,  
         titleFontSize=14   
     )
-   
-    #change names + delete this statement
-    output_dir_n = output_dir # !!!!
 
     new_chart_path = os.path.join(output_dir, 'new_chart.html') 
     if os.path.exists(new_chart_path):
@@ -450,7 +481,7 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
 
     combined_chart.save(new_chart_path, inline=True)
     change_html_file(new_chart_path)
-    
+   
     tabbed_context = {}
     vega_json = combined_chart.to_json()
     TEMPLATES = os.path.join(
@@ -461,13 +492,14 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
     tabbed_context.update({
         "vega_json": vega_json
     })
+    
     templates = os.path.join(TEMPLATES, 'index.html')
 
     copytree(
         src=TEMPLATES,
-        dst=output_dir_n,
-        dirs_exist_ok=True
+        dst=output_dir,
+        dirs_exist_ok=True 
     )
-  
-    q2templates.render(templates, output_dir_n, context=tabbed_context)
+   
+    q2templates.render(templates, output_dir, context=tabbed_context)
     
