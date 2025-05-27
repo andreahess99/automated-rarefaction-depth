@@ -7,6 +7,7 @@
 # ----------------------------------------------------------------------------
 
 
+import json
 import os
 from urllib.parse import quote
 import numpy as np
@@ -16,41 +17,21 @@ import q2templates
 from qiime2 import Artifact, sdk
 from kneed import KneeLocator
 import altair as alt
-import time
 from shutil import copytree
 import shutil
 from bs4 import BeautifulSoup
-#from tempfile import TemporaryDirectory
-#from qiime2.plugin import Visualization
-#from q2_types.feature_table import FeatureTable, Frequency
-#from q2_types.sample_data import AlphaDiversity, SampleData
 import warnings
 from biom import Table
 
 
 
 def df_to_feature_table(df: pd.DataFrame) -> qiime2.Artifact:
-    # Convert DataFrame to BIOM format
-    biom_table = Table(df.values, observation_ids=df.index, sample_ids=df.columns)
     
-    # Convert BIOM table to QIIME 2 FeatureTable[Frequency] Artifact
+    biom_table = Table(df.values, observation_ids=df.index, sample_ids=df.columns)
     feature_table_artifact = qiime2.Artifact.import_data("FeatureTable[Frequency]", biom_table)
     
     return feature_table_artifact  
 
-
-"""def rarefy(counts, depth, iteration, seed):
-    if sum(counts) < depth:
-        raise ValueError(f"Sample has fewer reads ({sum(counts)}) than the rarefaction depth ({depth}).")
-    
-    # Generate the rarefied sample by randomly subsampling without replacement
-    np.random.seed(iteration+seed)
-    counts = counts.astype(int)
-    reads = np.repeat(np.arange(len(counts)), counts)  
-    subsampled_reads = np.random.choice(reads, size=depth, replace=False)  
-    rarefied_counts = np.bincount(subsampled_reads, minlength=len(counts)) 
-    
-    return rarefied_counts"""
 
 def change_html_file(file_path: str) -> None:
     #add css stylesheet to the html file
@@ -64,9 +45,9 @@ def change_html_file(file_path: str) -> None:
 
 
 _pipe_defaults = {
-    'iterations': 10, #10
+    'iterations': 10,
     'table_size': None,
-    'steps': 20, #20
+    'steps': 15, #20
     'percent_samples': 0.8,
     'algorithm': 'kneedle', 
     'kmer_size': 16,
@@ -77,20 +58,22 @@ _pipe_defaults = {
     'norm': 'None'
 }
 
+#ignore warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=RuntimeWarning)
+warnings.simplefilter(action='ignore', category=UserWarning)
  
 #boots and seqs_to_kmers pipeline
 def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
                    kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
                    min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm']):
-    start_time = time.time()
+    
     alpha_action = ctx.get_action('boots', 'alpha')
     kmer_action = ctx.get_action('kmerizer', 'seqs_to_kmers')
     viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
 
     table_df = table.view(pd.DataFrame)
-    print(len(table_df))
     table_artifact = Artifact.import_data('FeatureTable[Frequency]', table_df)
 
     if table_df.empty:
@@ -98,7 +81,7 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     if not np.issubdtype(table_df.values.dtype, np.number):
         raise ValueError("The feature table contains non-numerical values.")
     
-    #run seqs_to_kmers if sequence and metadata are provided
+    #run seqs_to_kmers if sequence is provided
     kmer_run = False
     if sequence is not None:
         print("sequences were provided")
@@ -107,20 +90,10 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
         table_artifact = kmer_artifact
         table_df = table_artifact.view(pd.DataFrame)
         kmer_run = True
-        print("table_df:")
-        print(table_df)
         print("Feature Table generated from kmer sequences will be used for the analysis")
     else:
         print("no sequences were provided")
         print("kmerizer is not run")
-        # Replace the word 'xxxx' with 'kmerizer' in the index.html file
-        #how to replace words in html file 
-        """index_html_path = os.path.join(os.path.dirname(__file__), "assets", "index.html")
-        with open(index_html_path, 'r') as file:
-            content = file.read()
-        content = content.replace('xxxx', 'kmerizer')
-        with open(index_html_path, 'w') as file:
-            file.write(content)"""
     
 
     #adjusting table size if it's too big -> keep table_size rows
@@ -130,15 +103,10 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     table_size = len(table_df)
 
     reads_per_sample = table_df.sum(axis=1) 
-    #max_reads = reads_per_sample.max()
     percentile_90 = int(np.percentile(reads_per_sample, 90))
-    print(f"90th percentile of reads per sample: {percentile_90}")
     max_reads = percentile_90
-    
 
     sorted_depths = reads_per_sample.sort_values() 
-    print("sorted_depths:")
-    print(sorted_depths)
 
     sorted_depths_pass = sorted_depths.tolist()
     sorted_depths_pass = [int(depth) for depth in sorted_depths_pass]
@@ -154,7 +122,7 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
     
     for i in range(steps):
-        print(f"step: {max_range[i]}")   
+        print(f"step {i+1}: {max_range[i]}")   
         result, = alpha_action(table=table_artifact, sampling_depth=int(max_range[i]), metric='observed_features', n=iterations, replacement=False, average_method='mean')
         artifacts_list.append(result)
 
@@ -164,9 +132,8 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
         columns=[f"Step_{j+1}" for j in range(steps)]  
     )
     
-    #trying new approach because nothing else works
     for i, artifact in enumerate(artifacts_list):
-        artifact.export_data(f'output_directory_{i}')  # Export each artifact
+        artifact.export_data(f'output_directory_{i}') 
     dfs = []
     for i in range(len(artifacts_list)):
         df = pd.read_csv(f'output_directory_{i}/alpha-diversity.tsv', sep='\t', index_col=0)
@@ -196,18 +163,12 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
         if os.path.exists(dir_path):
             shutil.rmtree(dir_path)
 
-    #measuring time
-    end_time = time.time()
-    elapsed_time = end_time - start_time
-    print(f"Pipeline execution time: {elapsed_time:.2f} seconds")
-
     return visualization
     
 
 
 
 def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: pd.DataFrame, sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], steps: int, algorithm: str, kmer_run: bool)-> None: 
-    print("in rf_visualizer")
   
     sorted_depths = pd.Series(sorted_depths)
     if isinstance(reads_per_sample, list):
@@ -217,22 +178,19 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
     knee_points = [None] * len(sample_list)
     df_list = []
     pd_list = artifacts_list.transpose()
-    print("pd_list:")
-    print(pd_list) 
     
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
     for sample in sample_list:
         array_sample = np.array(pd_list.iloc[counter])
 
         array_sample = array_sample.flatten()
-        sample = np.full(len(max_range), sample)  # Create an array of repeated values
+        sample = np.full(len(max_range), sample)  
 
         sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample, 'sample': sample})
         df_list.append(sample_df)
     
         if(algorithm.lower().strip() == 'kneedle'):
             #using KneeLocator to find the knee point
-            #kneedle = KneeLocator(max_range, array_sample, curve="concave", direction="increasing")
             kneedle = KneeLocator(max_range, array_sample, curve="concave", direction="increasing", S=3)
             knee_points[counter] = kneedle.knee
         else:
@@ -246,14 +204,10 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
         counter += 1
 
     combined_df = pd.concat(df_list, ignore_index=True)
-    print("combined_df:")
-    print(combined_df)
-    print("knee_points:")
-    print(knee_points)
     
     knee_points_filtered = [point for point in knee_points if point is not None] 
     knee_point = round(np.mean(knee_points_filtered))
-    print("knee_point:")
+    print("calculated rarefaction depth:")
     print(knee_point)
    
     
@@ -391,25 +345,11 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
         y='shared'
     )
 
-    text = [f'Knee point: {knee_point} (at the {percentile:.2f} percentile)',
-            f'Knee point -5%: {lower_value:.0f} (at the {lower_percentile:.2f} percentile)',
-            f'Knee point +5%: {upper_value:.0f} (at the {upper_percentile:.2f} percentile)',
-            f'The shaded area is where at least {percent_samples * 100:.2f}% of the samples ',
-            f'are kept, if used as the rarefaction depth.',
-            f' ']
-          
-    if (knee_point > depth_threshold):
-        ps = percent_samples * 100
-        text.append(f"The knee point is above the specified, acceptable depth range!")
-        text.append(f"The upper bound of the acceptable range (keeping at least {ps:.2f}% of the samples) is {depth_threshold}.")
-        text.append(f" ")
-        text.append(f"If the calculated knee point is used, {percentile:.2f}% of the samples will")
-        text.append(f" be excluded because they have too little reads.")
-        
-    text_l = pd.DataFrame({'text': ['\n'.join(text)]})
-    text_lines = alt.Chart(text_l).mark_text(fontSize=16, size=14, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    text = [ '', '', '', '']   
+    text_l = pd.DataFrame({'text': ['\n'.join(text)]}) 
+    text_lines = alt.Chart(text_l).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     upper_chart = alt.vconcat(final_with_line, text_lines).properties(spacing=0)
-    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=10, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     upper_chart = alt.vconcat(empty_lines, upper_chart).properties(spacing=0)
 
 
@@ -417,6 +357,8 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
     predicate = alt.datum.reads_per_sample >= s 
     
     if kmer_run:
+        graph_data = "kmers"
+        graph_name = "Kmers"
         barplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
             x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Kmers per Sample'),
             y=alt.Y('count()', title='# Samples'),
@@ -433,7 +375,22 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
             width=450,
             height=350
         )
+
+        background = alt.Chart(reads_per_sample_df).mark_bar().encode(
+            x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Kmers per Sample'),  
+            y=alt.Y('count()', title='# Samples'),
+            color=alt.value('lightgrey')
+        ).add_params(
+            zoom
+        ).properties(
+            title='Histogram of Kmers per Sample',
+            width=450,
+            height=350
+        )
+
     else:
+        graph_data = "features"
+        graph_name = "Reads"
         barplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
             x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Reads per Sample'),
             y=alt.Y('count()', title='# Samples'),
@@ -451,24 +408,26 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
             height=350
         )
 
-    background = alt.Chart(reads_per_sample_df).mark_bar().encode(
-        x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Reads per Sample'),  
-        y=alt.Y('count()', title='# Samples'),
-        color=alt.value('lightgrey')
-    ).add_params(
-        zoom
-    ).properties(
-        title='Histogram of Reads per Sample',
-        width=450,
-        height=350
-    )
+        background = alt.Chart(reads_per_sample_df).mark_bar().encode(
+            x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Reads per Sample'),  
+            y=alt.Y('count()', title='# Samples'),
+            color=alt.value('lightgrey')
+        ).add_params(
+            zoom
+        ).properties(
+            title='Histogram of Reads per Sample',
+            width=450,
+            height=350
+        )
+
     barplot_combined = alt.layer(background, barplot).resolve_scale(
         x='shared',
         y='shared'
     )
     
-    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=10, align='left', baseline='top', lineBreak="\n", dx=-95, dy=-5).encode(text='text:N').properties(width=100, height=50)
-    barplot_combined = alt.vconcat(empty_lines, barplot_combined).properties(spacing=0)
+    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95, dy=-5).encode(text='text:N').properties(width=100, height=50)
+    barplot_combined = alt.vconcat(empty_lines, barplot_combined).properties(spacing=0) #size 10
+
         
     combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60).configure_legend(
         labelFontSize=14,  
@@ -489,8 +448,30 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
         "assets"
     )
 
+    add_text = False
+    if (knee_point > depth_threshold):
+        add_text = True
+
+    percent_samples_100 = round(percent_samples * 100, 2)
+    percentile = round(percentile, 2)
+    lower_percentile = round(lower_percentile, 2)
+    upper_percentile = round(upper_percentile, 2)
+    lower_value = round(lower_value, 0)
+    upper_value = round(upper_value, 0)
+
     tabbed_context.update({
-        "vega_json": vega_json
+        "vega_json": vega_json,
+        "knee_point": json.dumps(int(knee_point)),
+        "percent_samples_100": json.dumps(float(percent_samples_100)),
+        "depth_threshold": json.dumps(int(depth_threshold)),
+        "add_text": bool(add_text),
+        "percentile": json.dumps(float(percentile)),
+        "lower_percentile": json.dumps(float(lower_percentile)),
+        "upper_percentile": json.dumps(float(upper_percentile)),
+        "lower_value": json.dumps(int(lower_value)),
+        "upper_value": json.dumps(int(upper_value)),
+        "graph_data": graph_data,
+        "graph_name": graph_name
     })
     
     templates = os.path.join(TEMPLATES, 'index.html')

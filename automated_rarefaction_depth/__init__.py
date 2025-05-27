@@ -9,13 +9,10 @@
 
 from ._version import get_versions
 from ._visualizers import rarefaction_depth
-from ._pipeline import pipeline_test_new, _rf_visualizer
 from ._boots_pipeline import pipeline_boots, _rf_visualizer_boots
-from ._kmerizer_pipeline import pipeline_kmerizer#, _rf_visualizer_kmerizer
-from ._diversity_pipeline import pipeline_diversity #,  _rf_visualizer_diversity
 
-__all__ = ['rarefaction_depth', 'pipeline_test_new', '_rf_visualizer', 'pipeline_boots',
-           'pipeline_diversity', '_rf_visualizer_boots', 'pipeline_kmerizer']		
+
+__all__ = ['rarefaction_depth', 'pipeline_boots', '_rf_visualizer_boots']		
 
 __version__ = get_versions()["version"]
 del get_versions
