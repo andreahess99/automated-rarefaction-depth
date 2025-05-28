@@ -63,7 +63,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
  
-#boots and seqs_to_kmers pipeline
+
 def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
                    kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
@@ -81,13 +81,17 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     if not np.issubdtype(table_df.values.dtype, np.number):
         raise ValueError("The feature table contains non-numerical values.")
     
+    #adjusting table size if it's too big -> keep table_size rows
+    if (table_size is not None and len(table_df) > table_size):
+        table_df = table_df.sample(n=table_size, random_state=42) 
+        table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
+
     #run seqs_to_kmers if sequence is provided
     kmer_run = False
     if sequence is not None:
         print("sequences were provided")
         print("kmerizer is run")
-        kmer_artifact, = kmer_action(table=table_artifact, sequences=sequence, kmer_size=kmer_size, tfidf=tfidf, max_df=max_df, min_df=min_df, max_features=max_features, norm=norm)
-        table_artifact = kmer_artifact
+        table_artifact, = kmer_action(table=table_artifact, sequences=sequence, kmer_size=kmer_size, tfidf=tfidf, max_df=max_df, min_df=min_df, max_features=max_features, norm=norm)
         table_df = table_artifact.view(pd.DataFrame)
         kmer_run = True
         print("Feature Table generated from kmer sequences will be used for the analysis")
@@ -95,19 +99,13 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
         print("no sequences were provided")
         print("kmerizer is not run")
     
-
-    #adjusting table size if it's too big -> keep table_size rows
-    if (table_size is not None and len(table_df) > table_size):
-        table_df = table_df.sample(n=table_size, random_state=42) 
-        table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
+    
     table_size = len(table_df)
-
     reads_per_sample = table_df.sum(axis=1) 
     percentile_90 = int(np.percentile(reads_per_sample, 90))
     max_reads = percentile_90
 
     sorted_depths = reads_per_sample.sort_values() 
-
     sorted_depths_pass = sorted_depths.tolist()
     sorted_depths_pass = [int(depth) for depth in sorted_depths_pass]
     reads_per_sample_pass = reads_per_sample.tolist()
@@ -156,8 +154,6 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     for i in range(len(artifacts_list)):
         dir_path = f'output_directory_{i}'
         file_path = os.path.join(dir_path, 'alpha-diversity.tsv')
-        
-        # Remove files & directories if they exist
         if os.path.exists(file_path):
             os.remove(file_path)
         if os.path.exists(dir_path):
@@ -171,15 +167,14 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
 def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: pd.DataFrame, sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], steps: int, algorithm: str, kmer_run: bool)-> None: 
   
     sorted_depths = pd.Series(sorted_depths)
-    if isinstance(reads_per_sample, list):
-        reads_per_sample = pd.DataFrame(reads_per_sample)
+    reads_per_sample = pd.DataFrame(reads_per_sample)
 
     counter = 0
     knee_points = [None] * len(sample_list)
     df_list = []
     pd_list = artifacts_list.transpose()
-    
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
+
     for sample in sample_list:
         array_sample = np.array(pd_list.iloc[counter])
 
@@ -345,13 +340,11 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
         y='shared'
     )
 
-    text = [ '', '', '', '']   
-    text_l = pd.DataFrame({'text': ['\n'.join(text)]}) 
-    text_lines = alt.Chart(text_l).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    text_lines = alt.Chart(pd.DataFrame({'text': ['\n'.join(['', '', '', ''])]})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     upper_chart = alt.vconcat(final_with_line, text_lines).properties(spacing=0)
     empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     upper_chart = alt.vconcat(empty_lines, upper_chart).properties(spacing=0)
-
+    
 
     #barplot of reads_per_sample
     predicate = alt.datum.reads_per_sample >= s 
@@ -426,7 +419,7 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
     )
     
     empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95, dy=-5).encode(text='text:N').properties(width=100, height=50)
-    barplot_combined = alt.vconcat(empty_lines, barplot_combined).properties(spacing=0) #size 10
+    barplot_combined = alt.vconcat(empty_lines, barplot_combined).properties(spacing=0)
 
         
     combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60).configure_legend(
@@ -435,13 +428,10 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
     )
 
     new_chart_path = os.path.join(output_dir, 'new_chart.html') 
-    if os.path.exists(new_chart_path):
-        os.remove(new_chart_path)
 
     combined_chart.save(new_chart_path, inline=True)
     change_html_file(new_chart_path)
-   
-    tabbed_context = {}
+    
     vega_json = combined_chart.to_json()
     TEMPLATES = os.path.join(
         os.path.dirname(__file__),
@@ -459,7 +449,7 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
     lower_value = round(lower_value, 0)
     upper_value = round(upper_value, 0)
 
-    tabbed_context.update({
+    tabbed_context = {
         "vega_json": vega_json,
         "knee_point": json.dumps(int(knee_point)),
         "percent_samples_100": json.dumps(float(percent_samples_100)),
@@ -472,7 +462,7 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
         "upper_value": json.dumps(int(upper_value)),
         "graph_data": graph_data,
         "graph_name": graph_name
-    })
+    }
     
     templates = os.path.join(TEMPLATES, 'index.html')
 

@@ -14,8 +14,6 @@ from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.feature_data import (FeatureData, Sequence, RNASequence, ProteinSequence)
 from automated_rarefaction_depth import __version__
 from automated_rarefaction_depth._boots_pipeline import pipeline_boots, _rf_visualizer_boots
-from automated_rarefaction_depth._kmerizer_pipeline import pipeline_kmerizer
-from automated_rarefaction_depth._diversity_pipeline import pipeline_diversity
 
 
 citations = Citations.load("citations.bib", package="automated_rarefaction_depth")
