@@ -36,7 +36,7 @@ and https://github.com/bokulich-lab/q2-moshpit/blob/main/q2_moshpit/assets/busco
                 <p>
                     The Histogram of {{ graph_name }} per Sample on the right shows the number of samples which have a certain number of reads.
                     The grey bars are the samples that would be excluded if the rarefaction depth was set to the knee point, the blue bars the ones included.
-                    (If the slider hasn't been moved, otherwise it shows the same but with respect to the slider.)
+                    (This is the case if the slider hasn't been moved, otherwise it shows the same but with respect to the slider.)
                 </p>
                 <p>
                     Zoom in and out of the plots for more or less details.
@@ -51,7 +51,7 @@ and https://github.com/bokulich-lab/q2-moshpit/blob/main/q2_moshpit/assets/busco
                     Below the plots the knee point and the knee point ±5% is specified and at what percentiles those points lie.
                 </p>
                 <p>
-                    ATTENTION! The default acceptable range of rarefaction depths is set to keeping at least 80% of all samples. 
+                    ATTENTION! The acceptable range of rarefaction depths is set to keeping at least {{ percent_samples_100 }}% of all samples. 
                     The sensitivity of the kneedle algorithm is set to 3, and the evaluated depths are linearly spaced between 
                     1 and the read depth of the sample at the 90th percentile.
                 </p>

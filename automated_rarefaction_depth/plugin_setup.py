@@ -55,6 +55,8 @@ plugin.visualizers.register_function(
     citations=citations,
 )
 
+# descriptions of parameters used in the kmerizer action are copied from the q2-kmerizer plugin
+
 plugin.pipelines.register_function(
     function=pipeline_boots,
     inputs={'table': FeatureTable[Frequency],
@@ -97,13 +99,15 @@ plugin.pipelines.register_function(
             'if tfidf=False. l2: Sum of squares of vector elements is 1. '
             'l1: Sum of absolute values of vector elements is 1.'},
     input_descriptions={
-        'table': ('Feature table to compute rarefaction curves from.')
+        'table': 'Feature table to compute rarefaction curves from.',
+        'sequence': 'FeatureData containing sequences to be used in the kmerizer. If not provided, the feature table will be used directly.'
     },
     output_descriptions={
         'visualization': 'Visualization of the optimal rarefaction depth.'
     },
     name='Automated Rarefaction Depth Pipeline',
-    description=("Automatically computes an optimal rarefaction depth using q2-boots."),
+    description=("Automatically computes an optimal rarefaction depth using q2-boots. If sequences are provided, "
+                 "kmerizer is used to generate a feature table from the sequences, which will be used for the rarefaction depth calculation. "),
     citations=citations,
 )
 

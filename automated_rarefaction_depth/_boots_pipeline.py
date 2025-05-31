@@ -9,12 +9,11 @@
 
 import json
 import os
-from urllib.parse import quote
 import numpy as np
 import pandas as pd
 import qiime2
 import q2templates
-from qiime2 import Artifact, sdk
+from qiime2 import Artifact
 from kneed import KneeLocator
 import altair as alt
 from shutil import copytree
@@ -47,7 +46,7 @@ def change_html_file(file_path: str) -> None:
 _pipe_defaults = {
     'iterations': 10,
     'table_size': None,
-    'steps': 15, #20
+    'steps': 20,
     'percent_samples': 0.8,
     'algorithm': 'kneedle', 
     'kmer_size': 16,
@@ -98,12 +97,11 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     else:
         print("no sequences were provided")
         print("kmerizer is not run")
-    
-    
+   
+
     table_size = len(table_df)
     reads_per_sample = table_df.sum(axis=1) 
-    percentile_90 = int(np.percentile(reads_per_sample, 90))
-    max_reads = percentile_90
+    max_reads = int(np.percentile(reads_per_sample, 90))
 
     sorted_depths = reads_per_sample.sort_values() 
     sorted_depths_pass = sorted_depths.tolist()
@@ -433,6 +431,7 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
     change_html_file(new_chart_path)
     
     vega_json = combined_chart.to_json()
+
     TEMPLATES = os.path.join(
         os.path.dirname(__file__),
         "assets"
