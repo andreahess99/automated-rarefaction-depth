@@ -271,7 +271,7 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
         name='position', bind=alt.binding_range(min=0, max=max_reads, step=20, name='Rarefaction Depth Line'), value=knee_point
     )
     if kmer_run:
-        chart = alt.Chart(combined_df).mark_line(point=True).encode( #point=True means there are points on the line
+        chart = alt.Chart(combined_df).mark_line(point=True).encode( 
             x=alt.X('depth:Q', title='Total Kmer Count'),
             y=alt.Y('observed_features:Q', title='# Observed Distinct Kmers'),
             color=alt.Color('sample:N', legend=None).scale(scheme='category10')  
@@ -282,7 +282,7 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
             title='Rarefaction Curves'
         )
     else:
-        chart = alt.Chart(combined_df).mark_line(point=True).encode( #point=True means there are points on the line
+        chart = alt.Chart(combined_df).mark_line(point=True).encode(
             x=alt.X('depth:Q', title='Read Depth'),
             y=alt.Y('observed_features:Q', title='# Observed Features'),
             color=alt.Color('sample:N', legend=None).scale(scheme='category10')  
