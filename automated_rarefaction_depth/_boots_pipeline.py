@@ -9,6 +9,7 @@
 
 import json
 import os
+import tempfile
 import numpy as np
 import pandas as pd
 import qiime2
@@ -73,8 +74,11 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
 
     table_df = table.view(pd.DataFrame)
+    
+    # TODO: you should not need to do that - table will already be an Artifact
     table_artifact = Artifact.import_data('FeatureTable[Frequency]', table_df)
 
+    # TODO: I think you can also skip these checks - QIIME validation should take care of those
     if table_df.empty:
         raise ValueError("The feature table is empty.")
     if not np.issubdtype(table_df.values.dtype, np.number):
@@ -82,7 +86,7 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     
     #adjusting table size if it's too big -> keep table_size rows
     if (table_size is not None and len(table_df) > table_size):
-        table_df = table_df.sample(n=table_size, random_state=42) 
+        table_df = table_df.sample(n=table_size, random_state=42) # TODO: you should expose the seed to the user
         table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
 
     #run seqs_to_kmers if sequence is provided
@@ -90,6 +94,7 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     if sequence is not None:
         print("sequences were provided")
         print("kmerizer is run")
+        # TODO: here you just pass the original table
         table_artifact, = kmer_action(table=table_artifact, sequences=sequence, kmer_size=kmer_size, tfidf=tfidf, max_df=max_df, min_df=min_df, max_features=max_features, norm=norm)
         table_df = table_artifact.view(pd.DataFrame)
         kmer_run = True
@@ -104,10 +109,8 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     max_reads = int(np.percentile(reads_per_sample, 90))
 
     sorted_depths = reads_per_sample.sort_values() 
-    sorted_depths_pass = sorted_depths.tolist()
-    sorted_depths_pass = [int(depth) for depth in sorted_depths_pass]
-    reads_per_sample_pass = reads_per_sample.tolist()
-    reads_per_sample_pass = [int(read) for read in reads_per_sample_pass]
+    sorted_depths_pass = [int(depth) for depth in sorted_depths.tolist()] # TODO: are the depths not integers already?
+    reads_per_sample_pass = [int(read) for read in reads_per_sample.tolist()]
 
     sample_loss_index = int(np.ceil((1-percent_samples) * len(sorted_depths))) - 1 
     depth_threshold = int(sorted_depths.iloc[sample_loss_index])
@@ -124,13 +127,16 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
 
     pd_new = pd.DataFrame(
         np.nan,  
-        index=[sample_list[i] for i in range(table_size)],  
+        index=[sample_list[i] for i in range(table_size)], # TODO: this is not needed, you can just use the index of table_df 
         columns=[f"Step_{j+1}" for j in range(steps)]  
     )
     
+    # TODO: you don't need to export the artifacts to directories, you can just "view" them directly like this:
+    # df = artifact.view(pd.DataFrame)  # This will give you the DataFrame representation of the artifact
     for i, artifact in enumerate(artifacts_list):
-        artifact.export_data(f'output_directory_{i}') 
+        artifact.export_data(f'output_directory_{i}')
     dfs = []
+    # TODO: why don't you combine this loop with the previous one?
     for i in range(len(artifacts_list)):
         df = pd.read_csv(f'output_directory_{i}/alpha-diversity.tsv', sep='\t', index_col=0)
         dfs.append(df)
@@ -142,13 +148,17 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
 
     final_df = pd.concat(dfs, axis=0)
     final_df = final_df.reset_index(drop=True)
-  
+    
+    # TODO: you shouldn't need this additional method
+    # you can just import the DataFrame directly as an Artifact like so:
+    # qiime2.Artifact.import_data("FeatureTable[Frequency]", pd_new)
     artifact_ft = df_to_feature_table(pd_new)
 
     visualization, = viz_action(kmer_run=kmer_run, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, artifacts_list=artifact_ft, steps=int(steps),
                     sorted_depths=sorted_depths_pass, max_reads=int(max_reads), depth_threshold=int(depth_threshold), sample_list=sample_list, algorithm=algorithm)
   
     # Clean up the exported directories and files
+    # TODO: if you use the `export_data` method, you don't need to clean up the directories
     for i in range(len(artifacts_list)):
         dir_path = f'output_directory_{i}'
         file_path = os.path.join(dir_path, 'alpha-diversity.tsv')
@@ -163,7 +173,8 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
 
 
 def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: pd.DataFrame, sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], steps: int, algorithm: str, kmer_run: bool)-> None: 
-  
+    # TODO: high-level feedback: this function is too long and does too many things, you should split it into smaller functions
+    # for example, you can refactor the plotting part into a separate function and the data processing part into another function
     sorted_depths = pd.Series(sorted_depths)
     reads_per_sample = pd.DataFrame(reads_per_sample)
 
@@ -173,23 +184,22 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
     pd_list = artifacts_list.transpose()
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
 
+    # TODO: why do you need the counter? you can jsut use "enumerate" directly
     for sample in sample_list:
-        array_sample = np.array(pd_list.iloc[counter])
-
-        array_sample = array_sample.flatten()
+        array_sample = np.array(pd_list.iloc[counter]).flatten()
+        
         sample = np.full(len(max_range), sample)  
 
         sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample, 'sample': sample})
         df_list.append(sample_df)
     
-        if(algorithm.lower().strip() == 'kneedle'):
+        if(algorithm.lower().strip() == 'kneedle'): # TODO: you do not need the lower+strip - QIIME will take care of the case sensitivity
             #using KneeLocator to find the knee point
             kneedle = KneeLocator(max_range, array_sample, curve="concave", direction="increasing", S=3)
             knee_points[counter] = kneedle.knee
         else:
             #using the gradient method
-            curr_array = array_sample
-            first_derivative = np.gradient(curr_array, max_range)
+            first_derivative = np.gradient(array_sample, max_range)
             second_derivative = np.gradient(first_derivative, max_range)
             max_index = np.argmax(second_derivative)
             knee_points[counter] = max_range[max_index]
@@ -218,6 +228,8 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
     upper_value = sorted_depths.iloc[upper_index]
 
     #plotting with altair
+    # TODO: this function should be placed outside of the current one for better readability
+    # you can perhaps also give it a better name ;)
     def boots():
         font = "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif"
         return {
