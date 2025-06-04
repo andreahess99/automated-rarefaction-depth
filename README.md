@@ -18,7 +18,7 @@ conda update conda
 ###  Install development version of `automated-rarefaction-depth`
 
 Next, you need to get into the top-level `automated-rarefaction-depth` directory.
-If you already have this (e.g., because you just created the plugin), this may be as simple as running `cd automated-rarefaction-depth`.
+If you already have this, this may be as simple as running `cd automated-rarefaction-depth`.
 If not, you'll need the `automated-rarefaction-depth` directory on your computer.
 Download this repository.
 Once you have the directory on your computer, change (`cd`) into it.
@@ -29,13 +29,13 @@ If you're in a conda environment, deactivate it by running `conda deactivate`.
 Then, run:
 
 ```shell
-conda env create -n automated-rarefaction-depth-dev --file ./environments/automated-rarefaction-depth-qiime2-amplicon-2024.5.yml
+conda env create -n automated-rarefaction-depth --file ./environments/automated-rarefaction-depth-qiime2-amplicon-2024.5.yml
 ```
 
 After this completes, activate the new environment you created by running:
 
 ```shell
-conda activate automated-rarefaction-depth-dev
+conda activate automated-rarefaction-depth
 ```
 
 Finally, run:
