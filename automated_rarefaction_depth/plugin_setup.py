@@ -7,6 +7,7 @@
 # ----------------------------------------------------------------------------
 
 import automated_rarefaction_depth
+import pandas as pd
 from qiime2.plugin import (Plugin, Str, Properties, Choices, Int, Bool, Range,
                            Float, Set, Visualization, Metadata, MetadataColumn,
                            Categorical, Numeric, Citations, Threads, List)
@@ -65,8 +66,9 @@ plugin.pipelines.register_function(
     parameters={'percent_samples': Float % Range(0, 1),
                 'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
-                'steps': Int % Range(5, 100),
+                'steps': Int % Range(10, 100),
                 'algorithm': Str % Choices("kneedle", "gradient"),
+                'seed': Int % Range(1, None),
                 'kmer_size': Int,
                 'tfidf': Bool,
                 'max_df': Float % Range(0, 1, inclusive_start=True,
@@ -80,6 +82,7 @@ plugin.pipelines.register_function(
         'table_size': 'The number of samples to keep in the feature table, a positive number.',
         'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',
         'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.',
+        'seed': 'The seed used for the random sampling of samples in case the table is larger than the table_size parameter. A positive integer.',
         'kmer_size': 'Only needed for kmerizer! Length of kmers to generate.',
         'tfidf': 'Only needed for kmerizer! If True, kmers will be scored using TF-IDF and output '
              'frequencies will be weighted by scores. If False, kmers are '
@@ -113,29 +116,27 @@ plugin.pipelines.register_function(
 
 plugin.visualizers.register_function(
     function=_rf_visualizer_boots,
-    inputs={'artifacts_list': FeatureTable[Frequency]},
+    inputs={'combined_df': FeatureTable[Frequency]},
     parameters={'sorted_depths': List[Int],
                 'percent_samples': Float % Range(0, 1),
-                'reads_per_sample': List[Int],
                 'max_reads': Int % Range(1, None),
                 'depth_threshold': Int % Range(1, None),
-                'sample_list': List[Str],
-                'steps': Int % Range(5, 100),
-                'algorithm': Str % Choices("kneedle", "gradient"),
-                'kmer_run': Bool
+                'reads_per_sample': List[Int],
+                'kmer_run': Bool,
+                'knee_point': Int,
+                'sample_names': List[Str]
                 },
-    input_descriptions={
-        'artifacts_list': 'A set of .qza files containing AlphaDiversity artifacts.'
+    input_descriptions={#adjust input description
+        'combined_df': 'A set of .qza files containing AlphaDiversity artifacts.'
     },
     parameter_descriptions={
+        'sample_names': 'A list of sample names, used to label the samples in the visualization.',
         'sorted_depths': 'A list of sorted depths as integers.',
         'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
         'reads_per_sample': 'A list of how many reads each sample has.',
         'max_reads': 'The maximum amount of reads a single sample has.',
-        'depth_threshold': 'The highest read_depth to still be within the accepted area.',
-        'sample_list': 'The list of samples in the order they are processed.', 
-        'steps': 'The number of depths that get evaluated for each sample.',
-        'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.',
+        'depth_threshold': 'The highest read_depth to still be within the accepted area.', 
+        'knee_point': 'The knee point of the rarefaction curve, used to determine the optimal rarefaction depth.',
         'kmer_run': 'True if the pipeline was run with kmerizer, False otherwise.'
     },
     name='Automated Rarefaction Depth',

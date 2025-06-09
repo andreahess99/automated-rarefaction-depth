@@ -9,7 +9,6 @@
 
 import json
 import os
-import tempfile
 import numpy as np
 import pandas as pd
 import qiime2
@@ -18,219 +17,10 @@ from qiime2 import Artifact
 from kneed import KneeLocator
 import altair as alt
 from shutil import copytree
-import shutil
-from bs4 import BeautifulSoup
 import warnings
-from biom import Table
 
 
-
-def df_to_feature_table(df: pd.DataFrame) -> qiime2.Artifact:
-    
-    biom_table = Table(df.values, observation_ids=df.index, sample_ids=df.columns)
-    feature_table_artifact = qiime2.Artifact.import_data("FeatureTable[Frequency]", biom_table)
-    
-    return feature_table_artifact  
-
-
-def change_html_file(file_path: str) -> None:
-    #add css stylesheet to the html file
-    with open(file_path, 'r') as file:
-        soup = BeautifulSoup(file, 'html.parser')
-        link_tag = soup.new_tag('link', rel='stylesheet', href='./css/styles.css')
-        soup.head.append(link_tag)
-
-    with open(file_path, 'w') as file:
-        file.write(str(soup))
-
-
-_pipe_defaults = {
-    'iterations': 10,
-    'table_size': None,
-    'steps': 20,
-    'percent_samples': 0.8,
-    'algorithm': 'kneedle', 
-    'kmer_size': 16,
-    'tfidf': False,
-    'max_df': 1.0,
-    'min_df': 1,
-    'max_features': None,
-    'norm': 'None'
-}
-
-#ignore warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-warnings.simplefilter(action='ignore', category=RuntimeWarning)
-warnings.simplefilter(action='ignore', category=UserWarning)
- 
-
-def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
-                   steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
-                   kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
-                   min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm']):
-    
-    alpha_action = ctx.get_action('boots', 'alpha')
-    kmer_action = ctx.get_action('kmerizer', 'seqs_to_kmers')
-    viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
-
-    table_df = table.view(pd.DataFrame)
-    
-    # TODO: you should not need to do that - table will already be an Artifact
-    table_artifact = Artifact.import_data('FeatureTable[Frequency]', table_df)
-
-    # TODO: I think you can also skip these checks - QIIME validation should take care of those
-    if table_df.empty:
-        raise ValueError("The feature table is empty.")
-    if not np.issubdtype(table_df.values.dtype, np.number):
-        raise ValueError("The feature table contains non-numerical values.")
-    
-    #adjusting table size if it's too big -> keep table_size rows
-    if (table_size is not None and len(table_df) > table_size):
-        table_df = table_df.sample(n=table_size, random_state=42) # TODO: you should expose the seed to the user
-        table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
-
-    #run seqs_to_kmers if sequence is provided
-    kmer_run = False
-    if sequence is not None:
-        print("sequences were provided")
-        print("kmerizer is run")
-        # TODO: here you just pass the original table
-        table_artifact, = kmer_action(table=table_artifact, sequences=sequence, kmer_size=kmer_size, tfidf=tfidf, max_df=max_df, min_df=min_df, max_features=max_features, norm=norm)
-        table_df = table_artifact.view(pd.DataFrame)
-        kmer_run = True
-        print("Feature Table generated from kmer sequences will be used for the analysis")
-    else:
-        print("no sequences were provided")
-        print("kmerizer is not run")
-   
-
-    table_size = len(table_df)
-    reads_per_sample = table_df.sum(axis=1) 
-    max_reads = int(np.percentile(reads_per_sample, 90))
-
-    sorted_depths = reads_per_sample.sort_values() 
-    sorted_depths_pass = [int(depth) for depth in sorted_depths.tolist()] # TODO: are the depths not integers already?
-    reads_per_sample_pass = [int(read) for read in reads_per_sample.tolist()]
-
-    sample_loss_index = int(np.ceil((1-percent_samples) * len(sorted_depths))) - 1 
-    depth_threshold = int(sorted_depths.iloc[sample_loss_index])
-
-    artifacts_list = []
-    sample_list = table_df.index.tolist()
-
-    max_range = np.linspace(1, max_reads, num=steps, dtype=int)
-    
-    for i in range(steps):
-        print(f"step {i+1}: {max_range[i]}")   
-        result, = alpha_action(table=table_artifact, sampling_depth=int(max_range[i]), metric='observed_features', n=iterations, replacement=False, average_method='mean')
-        artifacts_list.append(result)
-
-    pd_new = pd.DataFrame(
-        np.nan,  
-        index=[sample_list[i] for i in range(table_size)], # TODO: this is not needed, you can just use the index of table_df 
-        columns=[f"Step_{j+1}" for j in range(steps)]  
-    )
-    
-    # TODO: you don't need to export the artifacts to directories, you can just "view" them directly like this:
-    # df = artifact.view(pd.DataFrame)  # This will give you the DataFrame representation of the artifact
-    for i, artifact in enumerate(artifacts_list):
-        artifact.export_data(f'output_directory_{i}')
-    dfs = []
-    # TODO: why don't you combine this loop with the previous one?
-    for i in range(len(artifacts_list)):
-        df = pd.read_csv(f'output_directory_{i}/alpha-diversity.tsv', sep='\t', index_col=0)
-        dfs.append(df)
-        for j, sample in enumerate(sample_list):
-            if sample in df.index:
-                pd_new.iloc[j, i] = df.loc[sample].values[0].round().astype(int)
-            else:
-                pd_new.iloc[j, i] = np.nan
-
-    final_df = pd.concat(dfs, axis=0)
-    final_df = final_df.reset_index(drop=True)
-    
-    # TODO: you shouldn't need this additional method
-    # you can just import the DataFrame directly as an Artifact like so:
-    # qiime2.Artifact.import_data("FeatureTable[Frequency]", pd_new)
-    artifact_ft = df_to_feature_table(pd_new)
-
-    visualization, = viz_action(kmer_run=kmer_run, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, artifacts_list=artifact_ft, steps=int(steps),
-                    sorted_depths=sorted_depths_pass, max_reads=int(max_reads), depth_threshold=int(depth_threshold), sample_list=sample_list, algorithm=algorithm)
-  
-    # Clean up the exported directories and files
-    # TODO: if you use the `export_data` method, you don't need to clean up the directories
-    for i in range(len(artifacts_list)):
-        dir_path = f'output_directory_{i}'
-        file_path = os.path.join(dir_path, 'alpha-diversity.tsv')
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-
-    return visualization
-    
-
-
-
-def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_sample: list[int], artifacts_list: pd.DataFrame, sorted_depths: list[int], max_reads: int, depth_threshold: int, sample_list: list[str], steps: int, algorithm: str, kmer_run: bool)-> None: 
-    # TODO: high-level feedback: this function is too long and does too many things, you should split it into smaller functions
-    # for example, you can refactor the plotting part into a separate function and the data processing part into another function
-    sorted_depths = pd.Series(sorted_depths)
-    reads_per_sample = pd.DataFrame(reads_per_sample)
-
-    counter = 0
-    knee_points = [None] * len(sample_list)
-    df_list = []
-    pd_list = artifacts_list.transpose()
-    max_range = np.linspace(1, max_reads, num=steps, dtype=int)
-
-    # TODO: why do you need the counter? you can jsut use "enumerate" directly
-    for sample in sample_list:
-        array_sample = np.array(pd_list.iloc[counter]).flatten()
-        
-        sample = np.full(len(max_range), sample)  
-
-        sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample, 'sample': sample})
-        df_list.append(sample_df)
-    
-        if(algorithm.lower().strip() == 'kneedle'): # TODO: you do not need the lower+strip - QIIME will take care of the case sensitivity
-            #using KneeLocator to find the knee point
-            kneedle = KneeLocator(max_range, array_sample, curve="concave", direction="increasing", S=3)
-            knee_points[counter] = kneedle.knee
-        else:
-            #using the gradient method
-            first_derivative = np.gradient(array_sample, max_range)
-            second_derivative = np.gradient(first_derivative, max_range)
-            max_index = np.argmax(second_derivative)
-            knee_points[counter] = max_range[max_index]
-
-        counter += 1
-
-    combined_df = pd.concat(df_list, ignore_index=True)
-    
-    knee_points_filtered = [point for point in knee_points if point is not None] 
-    knee_point = round(np.mean(knee_points_filtered))
-    print("calculated rarefaction depth:")
-    print(knee_point)
-   
-    
-    #finding +-5% points & at what percentile knee point is
-    index = np.searchsorted(sorted_depths, knee_point)
-    percentile = (index / len(sorted_depths)) * 100
-
-    lower_percentile = max(percentile - 5, 0) 
-    upper_percentile = min(percentile + 5, 100) 
-
-    lower_index = int((lower_percentile / 100) * len(sorted_depths))
-    upper_index = min(int((upper_percentile / 100) * len(sorted_depths)), len(sorted_depths) - 1)
-
-    lower_value = sorted_depths.iloc[lower_index]
-    upper_value = sorted_depths.iloc[upper_index]
-
-    #plotting with altair
-    # TODO: this function should be placed outside of the current one for better readability
-    # you can perhaps also give it a better name ;)
-    def boots():
+def altair_theme():
         font = "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif"
         return {
         "config" : {
@@ -257,11 +47,173 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
                   "fontSize": 16
              }
         }
-    } 
+    }
 
+
+_pipe_defaults = {
+    'iterations': 10,
+    'table_size': None,
+    'steps': 20,
+    'percent_samples': 0.8,
+    'algorithm': 'kneedle', 
+    'seed': 42,
+    'kmer_size': 16,
+    'tfidf': False,
+    'max_df': 1.0,
+    'min_df': 1,
+    'max_features': None,
+    'norm': 'None'
+}
+
+#ignore warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action='ignore', category=RuntimeWarning)
+warnings.simplefilter(action='ignore', category=UserWarning)
+ 
+
+def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
+                   steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
+                   seed = _pipe_defaults['seed'], kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
+                   min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm']):
+    
+    alpha_action = ctx.get_action('boots', 'alpha')
+    kmer_action = ctx.get_action('kmerizer', 'seqs_to_kmers')
+    viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
+
+    table_df = table.view(pd.DataFrame)
+
+    #run seqs_to_kmers if sequence is provided
+    kmer_run = False
+    if sequence is not None:
+        print("Sequences were provided as input.")
+        print("Therefore, the kmerizer is run to generate a new feature table with kmer sequences.")
+        print("This new kmer feature table will be used for the analysis.")
+        table, = kmer_action(table=table, sequences=sequence, kmer_size=kmer_size, tfidf=tfidf, max_df=max_df, min_df=min_df, max_features=max_features, norm=norm)
+        table_df = table.view(pd.DataFrame)
+        kmer_run = True
+    else:
+        print("No sequences were provided as input, and therefore, the kmerizer is not run.")
+        print("The feature table given as input will be used for the analysis.")
+   
+    #adjusting table size if it's too big -> keep table_size rows
+    if (table_size is not None and len(table_df) > table_size):
+        table_df = table_df.sample(n=table_size, random_state=seed)
+        table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
+
+    table_size = len(table_df)
+    reads_per_sample = table_df.sum(axis=1) 
+    max_reads = int(np.percentile(reads_per_sample, 90))
+
+    sorted_depths = reads_per_sample.sort_values()
+    sorted_depths_pass = [int(depth) for depth in sorted_depths.tolist()] # converting float to int
+    reads_per_sample_pass = [int(read) for read in reads_per_sample.tolist()]
+
+    sample_loss_index = int(np.ceil((1-percent_samples) * len(sorted_depths))) - 1 
+    depth_threshold = int(sorted_depths.iloc[sample_loss_index])
+
+    artifacts_list = []
+    sample_list = table_df.index.tolist()
+
+    max_range = np.linspace(1, max_reads, num=steps, dtype=int)
+    
+    for i in range(steps):
+        print(f"step {i+1}: {max_range[i]}")   
+        result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric='observed_features', n=iterations, replacement=False, average_method='mean')
+        artifacts_list.append(result)
+
+    pd_new = pd.DataFrame(
+        np.nan,  
+        index=table_df.index, 
+        columns=[f"Step_{j+1}" for j in range(steps)]  
+    )
+    
+    dfs = []
+    for i, artifact in enumerate(artifacts_list):
+        df = artifact.view(pd.Series).to_frame(name='observed_features')
+        dfs.append(df)
+        for j, sample in enumerate(sample_list):
+            if sample in df.index:
+                pd_new.iloc[j, i] = df.loc[sample].values[0].round().astype(int)
+            else:
+                pd_new.iloc[j, i] = np.nan
+
+    
+    combined_df, knee_point = _rf_knee_locator(artifacts_list=pd_new, sample_list=sample_list,
+                                               steps=steps, algorithm=algorithm, max_reads=max_reads)
+    
+    sample_names = combined_df.iloc[:, -1].tolist()
+    combined_df = combined_df.drop(combined_df.columns[-1], axis=1)
+
+    combined_df.index = combined_df.index.astype(str)
+    combined_artifact = qiime2.Artifact.import_data("FeatureTable[Frequency]", combined_df)
+
+    visualization, = viz_action(sample_names=sample_names, kmer_run=kmer_run, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
+                    sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold))
+
+    return visualization
+
+
+    
+def _rf_knee_locator(artifacts_list: pd.DataFrame, sample_list: list[str], steps: int, algorithm: str, max_reads: int) -> tuple[pd.DataFrame, int]:
+
+    knee_points = [None] * len(sample_list)
+    df_list = []
+    max_range = np.linspace(1, max_reads, num=steps, dtype=int)
+
+    for i, sample in enumerate(sample_list):
+        array_sample = np.array(artifacts_list.iloc[i]).flatten() 
+        sample = np.full(len(max_range), sample)  
+
+        sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample, 'sample': sample})
+        df_list.append(sample_df)
+    
+        if(algorithm == 'kneedle'):
+            #using KneeLocator to find the knee point
+            kneedle = KneeLocator(max_range, array_sample, curve="concave", direction="increasing", S=3)
+            knee_points[i] = kneedle.knee
+        else:
+            #using the gradient method
+            first_derivative = np.gradient(array_sample, max_range)
+            second_derivative = np.gradient(first_derivative, max_range)
+            max_index = np.argmax(second_derivative)
+            knee_points[i] = max_range[max_index]
+
+    combined_df = pd.concat(df_list, ignore_index=True)
+    
+    knee_points_filtered = [point for point in knee_points if point is not None] 
+    knee_point = round(np.mean(knee_points_filtered))
+    print("calculated rarefaction depth:")
+    print(knee_point)
+
+    return combined_df, knee_point
+
+    
+
+
+def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_samples: float, reads_per_sample: list[int], sorted_depths: list[int],
+                         max_reads: int, depth_threshold: int, knee_point: int, kmer_run: bool, combined_df: pd.DataFrame)-> None: 
+    
+    combined_df['sample'] = sample_names
+    sorted_depths = pd.Series(sorted_depths)
+    reads_per_sample = pd.DataFrame(reads_per_sample)
+
+    #finding +-5% points & at what percentile knee point is
+    index = np.searchsorted(sorted_depths, knee_point)
+    percentile = (index / len(sorted_depths)) * 100
+
+    lower_percentile = max(percentile - 5, 0) 
+    upper_percentile = min(percentile + 5, 100) 
+
+    lower_index = int((lower_percentile / 100) * len(sorted_depths))
+    upper_index = min(int((upper_percentile / 100) * len(sorted_depths)), len(sorted_depths) - 1)
+
+    lower_value = sorted_depths.iloc[lower_index]
+    upper_value = sorted_depths.iloc[upper_index]
+
+    #plotting with altair
     #register and enable the defined theme
-    alt.themes.register('boots', boots)
-    alt.themes.enable('boots')
+    alt.themes.register('altair_theme', altair_theme)
+    alt.themes.enable('altair_theme')
     alt.data_transformers.disable_max_rows()
 
     #plotting the rarefaction curves including the shaded area
@@ -344,17 +296,15 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
         height=350 
     )
     
-
     final_with_line = alt.layer(final_chart, vertical_line).resolve_scale( 
         x='shared',
         y='shared'
     )
 
-    text_lines = alt.Chart(pd.DataFrame({'text': ['\n'.join(['', '', '', ''])]})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     upper_chart = alt.vconcat(final_with_line, text_lines).properties(spacing=0)
     empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     upper_chart = alt.vconcat(empty_lines, upper_chart).properties(spacing=0)
-    
 
     #barplot of reads_per_sample
     predicate = alt.datum.reads_per_sample >= s 
@@ -390,7 +340,6 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
             width=450,
             height=350
         )
-
     else:
         graph_data = "features"
         graph_name = "Reads"
@@ -431,17 +380,18 @@ def _rf_visualizer_boots(output_dir: str, percent_samples: float, reads_per_samp
     empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95, dy=-5).encode(text='text:N').properties(width=100, height=50)
     barplot_combined = alt.vconcat(empty_lines, barplot_combined).properties(spacing=0)
 
-        
     combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60).configure_legend(
         labelFontSize=14,  
         titleFontSize=14   
     )
 
-    new_chart_path = os.path.join(output_dir, 'new_chart.html') 
+    combined_chart["padding"] = {
+        "top": 0,
+        "left": 0,
+        "right": 0,
+        "bottom": -49  
+    }
 
-    combined_chart.save(new_chart_path, inline=True)
-    change_html_file(new_chart_path)
-    
     vega_json = combined_chart.to_json()
 
     TEMPLATES = os.path.join(
