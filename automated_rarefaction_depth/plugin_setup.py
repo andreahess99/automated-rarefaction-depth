@@ -7,12 +7,10 @@
 # ----------------------------------------------------------------------------
 
 import automated_rarefaction_depth
-import pandas as pd
-from qiime2.plugin import (Plugin, Str, Properties, Choices, Int, Bool, Range,
-                           Float, Set, Visualization, Metadata, MetadataColumn,
-                           Categorical, Numeric, Citations, Threads, List)
+from qiime2.plugin import (Plugin, Str, Choices, Int, Bool, Range, Float, List,
+                            Set, Visualization, Metadata, MetadataColumn, Citations)
 from q2_types.feature_table import FeatureTable, Frequency
-from q2_types.feature_data import (FeatureData, Sequence, RNASequence, ProteinSequence)
+from q2_types.feature_data import FeatureData, Sequence
 from automated_rarefaction_depth import __version__
 from automated_rarefaction_depth._boots_pipeline import pipeline_boots, _rf_visualizer_boots
 
@@ -109,7 +107,7 @@ plugin.pipelines.register_function(
         'visualization': 'Visualization of the optimal rarefaction depth.'
     },
     name='Automated Rarefaction Depth Pipeline',
-    description=("Automatically computes an optimal rarefaction depth using q2-boots. If sequences are provided, "
+    description=("Automatically computes an optimal rarefaction depth using q2-boots. If sequences are provided, the "
                  "kmerizer is used to generate a feature table from the sequences, which will be used for the rarefaction depth calculation. "),
     citations=citations,
 )
@@ -126,21 +124,21 @@ plugin.visualizers.register_function(
                 'knee_point': Int,
                 'sample_names': List[Str]
                 },
-    input_descriptions={#adjust input description
-        'combined_df': 'A set of .qza files containing AlphaDiversity artifacts.'
+    input_descriptions={
+        'combined_df': 'A table containing the number of distinct features that were found in a sample at a specific depth.'
     },
     parameter_descriptions={
-        'sample_names': 'A list of sample names, used to label the samples in the visualization.',
+        'sample_names': 'A list of all sample names.',
         'sorted_depths': 'A list of sorted depths as integers.',
         'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
         'reads_per_sample': 'A list of how many reads each sample has.',
         'max_reads': 'The maximum amount of reads a single sample has.',
         'depth_threshold': 'The highest read_depth to still be within the accepted area.', 
         'knee_point': 'The knee point of the rarefaction curve, used to determine the optimal rarefaction depth.',
-        'kmer_run': 'True if the pipeline was run with kmerizer, False otherwise.'
+        'kmer_run': 'True if the pipeline was run with the kmerizer, False otherwise.'
     },
     name='Automated Rarefaction Depth',
-    description=("Automatically computes an optimal rarefaction depth."),
+    description=("Makes the graphs and produces the visualization."),
     citations=citations,
 )
 
