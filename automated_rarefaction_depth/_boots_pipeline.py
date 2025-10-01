@@ -62,7 +62,8 @@ _pipe_defaults = {
     'max_df': 1.0,
     'min_df': 1,
     'max_features': None,
-    'norm': 'None'
+    'norm': 'None',
+    'metric': 'observed_features'
 }
 
 #ignore warnings
@@ -71,7 +72,7 @@ warnings.simplefilter(action='ignore', category=RuntimeWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
  
 
-def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'],
+def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], metric=_pipe_defaults['metric'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
                    seed = _pipe_defaults['seed'], kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
                    min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm']):
@@ -102,8 +103,14 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
 
     table_size = len(table_df)
     reads_per_sample = table_df.sum(axis=1) 
-    max_reads = int(np.percentile(reads_per_sample, 90))
-
+    percentile = 90
+    #adjust max_reads if kneedle and shannon -> maybe adjust the percentile later
+    if (metric == 'shannon' and kmer_run == True):
+        percentile = 30
+    elif (metric == 'shannon' and kmer_run == False):
+        percentile = 60
+    max_reads = int(np.percentile(reads_per_sample, percentile))
+    
     sorted_depths = reads_per_sample.sort_values()
     sorted_depths_pass = [int(depth) for depth in sorted_depths.tolist()] # converting float to int
     reads_per_sample_pass = [int(read) for read in reads_per_sample.tolist()]
@@ -117,8 +124,8 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
     
     for i in range(steps):
-        print(f"step {i+1}: {max_range[i]}")   
-        result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric='observed_features', n=iterations, replacement=False, average_method='mean')
+        print(f"step {i+1}: {max_range[i]}")
+        result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
         artifacts_list.append(result)
 
     pd_new = pd.DataFrame(
@@ -147,8 +154,8 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     combined_df.index = combined_df.index.astype(str)
     combined_artifact = qiime2.Artifact.import_data("FeatureTable[Frequency]", combined_df)
 
-    visualization, = viz_action(sample_names=sample_names, kmer_run=kmer_run, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
-                    sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold))
+    visualization, = viz_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
+                    sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile)
 
     return visualization
 
@@ -191,7 +198,8 @@ def _rf_knee_locator(artifacts_list: pd.DataFrame, sample_list: list[str], steps
 
 
 def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_samples: float, reads_per_sample: list[int], sorted_depths: list[int],
-                         max_reads: int, depth_threshold: int, knee_point: int, kmer_run: bool, combined_df: pd.DataFrame)-> None: 
+                         metric: str, max_reads: int, depth_threshold: int, knee_point: int, kmer_run: bool, combined_df: pd.DataFrame,
+                         max_read_percentile: int)-> None: 
     
     combined_df['sample'] = sample_names
     sorted_depths = pd.Series(sorted_depths)
@@ -234,28 +242,36 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
     s = alt.param(
         name='position', bind=alt.binding_range(min=0, max=max_reads, step=20, name='Rarefaction Depth Line'), value=knee_point
     )
+
     if kmer_run:
-        chart = alt.Chart(combined_df).mark_line(point=True).encode( 
-            x=alt.X('depth:Q', title='Total Kmer Count'),
-            y=alt.Y('observed_features:Q', title='# Observed Distinct Kmers'),
-            color=alt.Color('sample:N', legend=None).scale(scheme='category10')  
-        ).add_params(
-            zoom,
-            param_checkbox
-        ).properties(
-            title='Rarefaction Curves'
-        )
+        title_x = 'Total Kmer Count'
+        title_y = '# Observed Distinct Kmers'
+        graph_data = "number of observed kmers"
+        graph_name = "Kmers"
+        barplot_title = 'Kmers per Sample'
+        property_title = 'Histogram of Kmers per Sample'
     else:
-        chart = alt.Chart(combined_df).mark_line(point=True).encode(
-            x=alt.X('depth:Q', title='Read Depth'),
-            y=alt.Y('observed_features:Q', title='# Observed Features'),
-            color=alt.Color('sample:N', legend=None).scale(scheme='category10')  
-        ).add_params(
-            zoom,
-            param_checkbox
-        ).properties(
-            title='Rarefaction Curves'
-        )
+        title_x = 'Read Depth'
+        title_y = '# Observed Features'
+        graph_data = "number of observed features"
+        graph_name = "Reads"
+        barplot_title = 'Reads per Sample'
+        property_title = 'Histogram of Reads per Sample'
+
+    if metric == 'shannon':
+        title_y = 'Shannon Index'
+        graph_data = "Shannon Index"
+
+    chart = alt.Chart(combined_df).mark_line(point=True).encode( 
+        x=alt.X('depth:Q', title=title_x),
+        y=alt.Y('observed_features:Q', title=title_y),
+        color=alt.Color('sample:N', legend=None).scale(scheme='category10')  
+    ).add_params(
+        zoom,
+        param_checkbox
+    ).properties(
+        title='Rarefaction Curves'
+    )
 
     shaded_area = alt.Chart(pd.DataFrame({
         'x_min': [0],
@@ -308,69 +324,35 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
 
     #barplot of reads_per_sample
     predicate = alt.datum.reads_per_sample >= s 
-    
-    if kmer_run:
-        graph_data = "kmers"
-        graph_name = "Kmers"
-        barplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
-            x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Kmers per Sample'),
-            y=alt.Y('count()', title='# Samples'),
-            color=alt.value('steelblue')  
-        ).add_params(
-            s,
-            zoom
-        ).transform_filter(
-            predicate
-        ).transform_calculate(
-            position='position'
-        ).properties(
-            title='Histogram of Kmers per Sample',
-            width=450,
-            height=350
-        )
 
-        background = alt.Chart(reads_per_sample_df).mark_bar().encode(
-            x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Kmers per Sample'),  
-            y=alt.Y('count()', title='# Samples'),
-            color=alt.value('lightgrey')
-        ).add_params(
-            zoom
-        ).properties(
-            title='Histogram of Kmers per Sample',
-            width=450,
-            height=350
-        )
-    else:
-        graph_data = "features"
-        graph_name = "Reads"
-        barplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
-            x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Reads per Sample'),
-            y=alt.Y('count()', title='# Samples'),
-            color=alt.value('steelblue')  
-        ).add_params(
-            s,
-            zoom
-        ).transform_filter(
-            predicate
-        ).transform_calculate(
-            position='position'
-        ).properties(
-            title='Histogram of Reads per Sample',
-            width=450,
-            height=350
-        )
+    barplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
+        x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title=barplot_title),
+        y=alt.Y('count()', title='# Samples'),
+        color=alt.value('steelblue')  
+    ).add_params(
+        s,
+        zoom
+    ).transform_filter(
+        predicate
+    ).transform_calculate(
+        position='position'
+    ).properties(
+        title=property_title,
+        width=450,
+        height=350
+    )
 
-        background = alt.Chart(reads_per_sample_df).mark_bar().encode(
-            x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title='Reads per Sample'),  
-            y=alt.Y('count()', title='# Samples'),
-            color=alt.value('lightgrey')
-        ).add_params(
-            zoom
-        ).properties(
-            title='Histogram of Reads per Sample',
-            width=450,
-            height=350
-        )
+    background = alt.Chart(reads_per_sample_df).mark_bar().encode(
+        x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title=barplot_title),  
+        y=alt.Y('count()', title='# Samples'),
+        color=alt.value('lightgrey')
+    ).add_params(
+        zoom
+    ).properties(
+        title=property_title,
+        width=450,
+        height=350
+    )
 
     barplot_combined = alt.layer(background, barplot).resolve_scale(
         x='shared',
@@ -422,7 +404,8 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
         "lower_value": json.dumps(int(lower_value)),
         "upper_value": json.dumps(int(upper_value)),
         "graph_data": graph_data,
-        "graph_name": graph_name
+        "graph_name": graph_name,
+        "max_read_percentile": json.dumps(int(max_read_percentile))
     }
     
     templates = os.path.join(TEMPLATES, 'index.html')

@@ -67,6 +67,7 @@ plugin.pipelines.register_function(
                 'steps': Int % Range(10, 100),
                 'algorithm': Str % Choices("kneedle", "gradient"),
                 'seed': Int % Range(1, None),
+                'metric': Str % Choices(['observed_features', 'shannon']),
                 'kmer_size': Int,
                 'tfidf': Bool,
                 'max_df': Float % Range(0, 1, inclusive_start=True,
@@ -81,6 +82,7 @@ plugin.pipelines.register_function(
         'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',
         'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.',
         'seed': 'The seed used for the random sampling of samples in case the table is larger than the table_size parameter. A positive integer.',
+        'metric': 'The alpha diversity metric to use for the rarefaction curves. Either observed_features or shannon.',
         'kmer_size': 'Only needed for kmerizer! Length of kmers to generate.',
         'tfidf': 'Only needed for kmerizer! If True, kmers will be scored using TF-IDF and output '
              'frequencies will be weighted by scores. If False, kmers are '
@@ -117,7 +119,9 @@ plugin.visualizers.register_function(
     inputs={'combined_df': FeatureTable[Frequency]},
     parameters={'sorted_depths': List[Int],
                 'percent_samples': Float % Range(0, 1),
+                'metric': Str % Choices(['observed_features', 'shannon']),
                 'max_reads': Int % Range(1, None),
+                'max_read_percentile': Int % Range(1, 100),
                 'depth_threshold': Int % Range(1, None),
                 'reads_per_sample': List[Int],
                 'kmer_run': Bool,
@@ -130,8 +134,10 @@ plugin.visualizers.register_function(
     parameter_descriptions={
         'sample_names': 'A list of all sample names.',
         'sorted_depths': 'A list of sorted depths as integers.',
+        'max_read_percentile': 'The maximum read depth percentile used for linearly spacing the evaluated depths.',
         'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
         'reads_per_sample': 'A list of how many reads each sample has.',
+        'metric': 'The alpha diversity metric to use for the rarefaction curves. Either observed_features or shannon.',
         'max_reads': 'The maximum amount of reads a single sample has.',
         'depth_threshold': 'The highest read_depth to still be within the accepted area.', 
         'knee_point': 'The knee point of the rarefaction curve, used to determine the optimal rarefaction depth.',
