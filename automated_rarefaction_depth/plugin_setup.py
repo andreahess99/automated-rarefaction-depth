@@ -12,7 +12,7 @@ from qiime2.plugin import (Plugin, Str, Choices, Int, Bool, Range, Float, List,
 from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.feature_data import FeatureData, Sequence
 from automated_rarefaction_depth import __version__
-from automated_rarefaction_depth._boots_pipeline import pipeline_boots, _rf_visualizer_boots
+from automated_rarefaction_depth._boots_pipeline import pipeline_boots, _rf_visualizer_boots, _beta_viz
 
 
 citations = Citations.load("citations.bib", package="automated_rarefaction_depth")
@@ -62,12 +62,13 @@ plugin.pipelines.register_function(
             'sequence': FeatureData[Sequence]},
     outputs={'visualization': Visualization},
     parameters={'percent_samples': Float % Range(0, 1),
+                'meta_data': Metadata, #added for testing working with metadata
                 'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
-                'steps': Int % Range(10, 100),
+                'steps': Int % Range(10, 100), 
                 'algorithm': Str % Choices("kneedle", "gradient"),
                 'seed': Int % Range(1, None),
-                'metric': Str % Choices(['observed_features', 'shannon']),
+                'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard']), #
                 'kmer_size': Int,
                 'tfidf': Bool,
                 'max_df': Float % Range(0, 1, inclusive_start=True,
@@ -79,6 +80,7 @@ plugin.pipelines.register_function(
     parameter_descriptions={'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
         'iterations': 'The number of times each sample gets rarefied at each depth, a positive number below 100.',
         'table_size': 'The number of samples to keep in the feature table, a positive number.',
+        'meta_data': 'Metadata to be used in the analysis.', #added for testing working with metadata
         'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',
         'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.',
         'seed': 'The seed used for the random sampling of samples in case the table is larger than the table_size parameter. A positive integer.',
@@ -145,6 +147,31 @@ plugin.visualizers.register_function(
     },
     name='Automated Rarefaction Depth',
     description=("Makes the graphs and produces the visualization."),
+    citations=citations,
+)
+
+#beta visualizer
+plugin.visualizers.register_function(
+    function=_beta_viz,
+    inputs={},
+    parameters={'metric': Str % Choices(['braycurtis', 'jaccard']),
+                'max_range': List[Int],
+                'kmer_run': Bool,
+                'algorithm': Str % Choices(['kneedle', 'gradient']),
+                'calc_array': List[Float],
+                'num_samples_left': List[Int]
+    },
+    input_descriptions={},
+    parameter_descriptions={
+        'algorithm': "The algorithm which was chosen for the knee point calculation, kneedle or gradient",
+        'metric': 'The beta diversity metric to use for the rarefaction curves. Either jaccard or braycurtis.',
+        'max_range': 'The different read depths at which the distance matrix was calculated.',
+        'kmer_run': 'True if the pipeline was run with the kmerizer, False otherwise.',
+        'calc_array': 'The array of the calculated points.',
+        'num_samples_left': "This array contains how many samples are considered at the considered read depths."
+    },
+    name='Automated Rarefaction Depth',
+    description=("Calculates the knee point and produces the visualization for beta metrics."),
     citations=citations,
 )
 

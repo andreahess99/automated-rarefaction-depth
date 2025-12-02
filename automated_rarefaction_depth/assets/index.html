@@ -27,52 +27,65 @@ and https://github.com/bokulich-lab/q2-moshpit/blob/main/q2_moshpit/assets/busco
         <div class="card">
             <h5 class="card-header">Automated Rarefaction Depth Summary</h5>
             <div class="card-body">
-                <p>
-                    The Rarefaction Curves plot on the left shows the {{ graph_data }}
-                    at each depth for every sample as a curve. The shaded area represents the specified acceptable
-                    range of rarefaction depths. The optimal rarefaction depth is depicted as the vertical line named knee point. 
-                    It is the knee point that was calculated using the specified algorithm.
-                </p>
-                <p>
-                    The Histogram of {{ graph_name }} per Sample on the right shows the number of samples which have a certain number of reads.
-                    The grey bars are the samples that would be excluded if the rarefaction depth was set to the knee point, the blue bars the ones included.
-                    (This is the case if the slider hasn't been moved, otherwise it shows the same but with respect to the slider.)
-                </p>
-                <p>
-                    Zoom in and out of the plots for more or less details.
-                </p>
-                <p>
-                    Click on the checkbox above the plots to show the line with the rarefaction depth according to the slider.
-                    Move the slider to change the black rarefaction depth line accordingly. Additionally, the bars in the barplot 
-                    on the right are blue if the sample has a read count above the specified rarefaction depth, meaning that
-                    sample would be included if this rarefaction depth was chosen, otherwise the bars are grey. 
-                </p>
-                <p>
-                    Below the plots the knee point and the knee point ±5% is specified and at what percentiles those points lie.
-                </p>
-                <p>
-                    ATTENTION! The acceptable range of rarefaction depths is set to keeping at least {{ percent_samples_100 }}% of all samples. 
-                    The sensitivity of the kneedle algorithm is set to 3, and the evaluated depths are linearly spaced between 
-                    1 and the read depth of the sample at the {{ max_read_percentile }}th percentile.
-                </p>
-                <div class="col-lg-12" id="plots_summary" style="max-height: 480px; overflow: hidden;"></div>
-                    <div id="plots" style="width: 100%; height: 480px;"></div>  
-                </div>
-                <p>
-                    Knee point: {{ knee_point }} (at the {{ percentile }} percentile)<br>
-                    Knee point -5%: {{ lower_value }} (at the {{ lower_percentile }} percentile)<br>
-                    Knee point +5%: {{ upper_value }} (at the {{ upper_percentile }} percentile)<br>
-                    The shaded area is where at least {{ percent_samples_100 }}% of the samples
-                    are kept, if used as the rarefaction depth.
-                </p>
-                {% if add_text is sameas true %}
+                {% if beta is sameas true %}
                     <p>
-                        The knee point is above the specified, acceptable depth range!<br>
-                        The upper bound of the acceptable range (keeping at least {{ percent_samples_100 }}% of the samples) is {{ depth_threshold }}.<br>
-                        If the calculated knee point is used, {{ percentile }}% of the samples will
-                        be excluded because they have too little reads.
+                        This visualization shows the rarefaction analysis for the beta diversity metric {{ beta_metric }}.
                     </p>
-                {% endif %}  
+                    <div class="col-lg-12" id="plots_summary" style="max-height: 480px; overflow: hidden;"></div>
+                        <div id="plots" style="width: 100%; height: 480px;"></div>  
+                    </div>
+                    <p>
+                        Knee point: {{ knee_point }} (at the {{ percentile }} percentile)<br>
+                        
+                    </p>
+                {% else %}
+                    <p>
+                        The Rarefaction Curves plot on the left shows the {{ graph_data }}
+                        at each depth for every sample as a curve. The shaded area represents the specified acceptable
+                        range of rarefaction depths. The optimal rarefaction depth is depicted as the vertical line named knee point. 
+                        It is the knee point that was calculated using the specified algorithm.
+                    </p>
+                    <p>
+                        The Histogram of {{ graph_name }} per Sample on the right shows the number of samples which have a certain number of reads.
+                        The grey bars are the samples that would be excluded if the rarefaction depth was set to the knee point, the blue bars the ones included.
+                        (This is the case if the slider hasn't been moved, otherwise it shows the same but with respect to the slider.)
+                    </p>
+                    <p>
+                        Zoom in and out of the plots for more or less details.
+                    </p>
+                    <p>
+                        Click on the checkbox above the plots to show the line with the rarefaction depth according to the slider.
+                        Move the slider to change the black rarefaction depth line accordingly. Additionally, the bars in the barplot 
+                        on the right are blue if the sample has a read count above the specified rarefaction depth, meaning that
+                        sample would be included if this rarefaction depth was chosen, otherwise the bars are grey. 
+                    </p>
+                    <p>
+                        Below the plots the knee point and the knee point ±5% is specified and at what percentiles those points lie.
+                    </p>
+                    <p>
+                        ATTENTION! The acceptable range of rarefaction depths is set to keeping at least {{ percent_samples_100 }}% of all samples. 
+                        The sensitivity of the kneedle algorithm is set to 3, and the evaluated depths are linearly spaced between 
+                        1 and the read depth of the sample at the {{ max_read_percentile }}th percentile.
+                    </p>
+                    <div class="col-lg-12" id="plots_summary" style="max-height: 480px; overflow: hidden;"></div>
+                        <div id="plots" style="width: 100%; height: 480px;"></div>  
+                    </div>
+                    <p>
+                        Knee point: {{ knee_point }} (at the {{ percentile }} percentile)<br>
+                        Knee point -5%: {{ lower_value }} (at the {{ lower_percentile }} percentile)<br>
+                        Knee point +5%: {{ upper_value }} (at the {{ upper_percentile }} percentile)<br>
+                        The shaded area is where at least {{ percent_samples_100 }}% of the samples
+                        are kept, if used as the rarefaction depth.
+                    </p>
+                    {% if add_text is sameas true %}
+                        <p>
+                            The knee point is above the specified, acceptable depth range!<br>
+                            The upper bound of the acceptable range (keeping at least {{ percent_samples_100 }}% of the samples) is {{ depth_threshold }}.<br>
+                            If the calculated knee point is used, {{ percentile }}% of the samples will
+                            be excluded because they have too little reads.
+                        </p>
+                    {% endif %}  
+                {% endif %}
             </div>   
         </div> 
     </div>
@@ -118,6 +131,8 @@ and https://github.com/bokulich-lab/q2-moshpit/blob/main/q2_moshpit/assets/busco
     const graphData = {{ graph_data }};
     const graphName = {{ graph_name }};
     const maxReadPercentile = {{ max_read_percentile | safe }};
+    const isBeta = {{ beta | lower }};
+    const betaMetric = {{ beta_metric | safe }};
   </script>
 
 {% endblock %}
