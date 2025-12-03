@@ -23,7 +23,7 @@ plugin = Plugin(
     website="https://github.com/andreahess99/automated-rarefaction-depth",
     package="automated_rarefaction_depth",
     description="This qiime2 plugin gives you a tool to automatically calculate the ideal rarefaction depth based on the given data and some user parameters.",
-    short_description="A tool that automatically calculates the ideal rarefaction depth.",
+    short_description="Plugin for automatically calculating the ideal rarefaction depth.",
     citations=citations 
 )
  
@@ -155,7 +155,7 @@ plugin.visualizers.register_function(
     function=_beta_viz,
     inputs={},
     parameters={'metric': Str % Choices(['braycurtis', 'jaccard']),
-                'max_range': List[Int],
+                'max_range': List[Float],
                 'kmer_run': Bool,
                 'algorithm': Str % Choices(['kneedle', 'gradient']),
                 'calc_array': List[Float],

@@ -139,7 +139,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
 
     #check if beta metric, if yes run the for loop with the specified beta metric and then call beta_viz and return the result of it
     # currently does not work --> commented out so I can test other things without getting errors
-    """if metric in ['braycurtis', 'jaccard']:
+    if metric in ['braycurtis', 'jaccard']:
         num_samples_left = [None] * (steps)
         avg_difference = [None] * (steps-1)
         median_difference = [None] * (steps-1)
@@ -176,68 +176,18 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             
             old_beta_result = beta_result
 
-        #added because something was buggy
-        #max_range_list = [int(x) for x in max_range.tolist()]
-        #calc_array_list = [float(x) if x is not None else None for x in mean_list]
-        #num_samples_left_list = [int(x) if x is not None else None for x in num_samples_left]
-        #visualization = beta_viz_action(max_range=max_range_list, kmer_run=bool(kmer_run), calc_array=calc_array_list, metric=str(metric), algorithm=str(algorithm), num_samples_left=num_samples_left_list)
-        visualization = beta_viz_action(max_range=max_range.tolist(), kmer_run=kmer_run, calc_array=mean_list, metric=metric, algorithm=algorithm, num_samples_left=num_samples_left)
+       
+        visualization = beta_viz_action(max_range=max_range.tolist(), kmer_run=kmer_run, calc_array=avg_difference, metric=metric, algorithm=algorithm, num_samples_left=num_samples_left)
         print("Returning beta visualization now.")
         #return visualization
-        visualization.visualization.save('beta-visualization.qzv')
-
-        return visualization.visualization"""
+        #visualization[0].save('beta-visualization.qzv')
+        return visualization[0]
         
     #continue normally if alpha metric was chosen
     for i in range(steps):
         print(f"step {i+1}: {max_range[i]}")
         result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
         artifacts_list.append(result)
-        
-        #added for beta testing 
-        """beta_result, = beta_action(table=table, sampling_depth=(int(max_range[i])), metric='braycurtis', n=iterations, replacement=False)
-        if i>0:
-            # reduce old_beta_result to only the ids present in the current beta_result
-            old_dm_full = old_beta_result.view(DistanceMatrix)
-            new_ids = list(beta_result.view(DistanceMatrix).ids)
-            common_ids = [sid for sid in old_dm_full.ids if sid in new_ids]
-
-            if common_ids:
-                idxs = [old_dm_full.ids.index(sid) for sid in common_ids]
-                subdata = old_dm_full.data[np.ix_(idxs, idxs)]
-                old_dm = DistanceMatrix(subdata, ids=common_ids)
-        
-            new_dm = beta_result.view(DistanceMatrix)
-            difference = np.abs(new_dm.data - old_dm.data)
-            avg_difference[i-1] = np.mean(difference[np.triu_indices_from(difference, k=1)])
-            median_difference[i-1] = np.median(difference[np.triu_indices_from(difference, k=1)])
-            std_difference[i-1] = np.std(difference[np.triu_indices_from(difference, k=1)])
-            p75_25_difference[i-1] = np.percentile(difference[np.triu_indices_from(difference, k=1)], 75) - np.percentile(difference[np.triu_indices_from(difference, k=1)], 25)
-            avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
-            
-        old_beta_result = beta_result"""
-        
-    #for beta plotting
-    # combined plot of the four difference arrays without first point
-    """plt.figure(figsize=(8, 5))
-    plt.plot(avg_range[1:], avg_difference[1:], marker='o', linestyle='-', color='tab:blue', label='Avg difference')
-    plt.plot(avg_range[1:], median_difference[1:], marker='o', linestyle='-', color='tab:orange', label='Median difference')
-    plt.plot(avg_range[1:], std_difference[1:], marker='o', linestyle='-', color='tab:green', label='Std difference')
-    plt.plot(avg_range[1:], p75_25_difference[1:], marker='o', linestyle='-', color='tab:red', label='75-25 difference')
-    plt.xlabel("Avg Read Depth between Steps")
-    plt.ylabel("Difference in Distance Matrix")
-    plt.title("Comparison of DM Differences Between Steps without First Point")
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig("dm_diff_comparison_bc_without_first_point.png", dpi=300)
-    plt.close()
-    kneedle = KneeLocator(avg_range[1:], avg_difference[1:], curve="convex", direction="decreasing", S=3)
-    print(f"avg kneedle: {kneedle.knee}")
-    first_derivative = np.gradient(avg_difference, avg_range)
-    second_derivative = np.gradient(first_derivative, avg_range)
-    print(f"avg gradient: {np.argmax(second_derivative)}")"""
-
 
     pd_new = pd.DataFrame(
         np.nan,  
@@ -272,17 +222,22 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
 
 
 #calculates the knee point and makes the visualization for beta rarefaction
-def _beta_viz(output_dir: str, max_range: list[int], kmer_run: bool, calc_array: list[float], metric: str, algorithm: str, num_samples_left: list[int])->None:
+def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_array: list[float], metric: str, algorithm: str, num_samples_left: list[int])->None:
     
     print("in beta_viz")
+    avg_range = [None] * (len(max_range)-1)
+    for i in range(1, len(max_range)):
+        avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
+        #print(f"average range between steps: {avg_range[i-1]}")
+
     #calculate knee  point
     if algorithm == 'kneedle':
-        kneedle = KneeLocator(max_range[1:], calc_array[1:], curve="concave", direction="decreasing", S=3)
+        kneedle = KneeLocator(avg_range[1:], calc_array[1:], curve="concave", direction="decreasing", S=3)
         knee_point = kneedle.knee
         print(f"kneedle knee point: {knee_point}")
     else:
-        first_derivative = np.gradient(calc_array[1:], max_range[1:])
-        second_derivative = np.gradient(first_derivative, max_range[1:])
+        first_derivative = np.gradient(calc_array[1:], avg_range[1:])
+        second_derivative = np.gradient(first_derivative, avg_range[1:])
         knee_point = np.argmax(second_derivative)
         print(f"gradient knee point: {knee_point}")
 
@@ -298,10 +253,10 @@ def _beta_viz(output_dir: str, max_range: list[int], kmer_run: bool, calc_array:
     )
 
     s = alt.param(
-        name='position', bind=alt.binding_range(min=0, max=max_range[-1], step=20, name='Rarefaction Depth Line'), value=knee_point
+        name='position', bind=alt.binding_range(min=0, max=avg_range[-1], step=20, name='Rarefaction Depth Line'), value=knee_point
     )
 
-    df = pd.DataFrame({'max_range': max_range, 'calc_array': calc_array})
+    df = pd.DataFrame({'max_range': avg_range, 'calc_array': calc_array})
     base = alt.Chart(df).mark_line(point=True).encode(
             x=alt.X('max_range:Q', title='Read Depth'),
             y=alt.Y('calc_array:Q', title='Calculated Value'), #adjust to what it is
@@ -309,7 +264,7 @@ def _beta_viz(output_dir: str, max_range: list[int], kmer_run: bool, calc_array:
             width=450,
             height=350,
             title='Beta Rarefaction Curve'
-        ).add_params(zoom)
+        ).add_selection(zoom) #was add_params before
     
     static_line = alt.Chart(pd.DataFrame({'position': [knee_point]})).mark_rule(
         color='red', strokeWidth=2).encode(x='position:Q').properties()
@@ -317,7 +272,8 @@ def _beta_viz(output_dir: str, max_range: list[int], kmer_run: bool, calc_array:
     moving_line = alt.Chart(pd.DataFrame({'position': [0]})).mark_rule(
         color='black', strokeWidth=2, strokeDash=[4, 4]).encode(
             x='position:Q'
-        ).add_params(s).transform_calculate(position='position').transform_filter(param_checkbox)
+        ).add_selection(s).transform_calculate(position='position').transform_filter(param_checkbox)#was add_params(s) before
+    
 
     beta_rf_plot = alt.layer(base, static_line, moving_line).resolve_scale( 
         x='shared',
@@ -358,10 +314,9 @@ def _beta_viz(output_dir: str, max_range: list[int], kmer_run: bool, calc_array:
     context = { #will probably need to add more variables here
         "vega_json": vega_json,
         "beta_metric": metric,
-        "knee_point": knee_point,
-        "beta": True
-    }
-    defaults = { #have all variables that are needed for alpha_viz as well with dummy values
+        "knee_point": json.dumps(knee_point),
+        "beta": True,
+        #have all variables that are needed for alpha_viz as well with dummy values
         "knee_point": 1,
         "percent_samples_100": 0,
         "depth_threshold": 0,
@@ -375,8 +330,10 @@ def _beta_viz(output_dir: str, max_range: list[int], kmer_run: bool, calc_array:
         "graph_name": "undefined",
         "max_read_percentile": 0
     }
-    tabbed_context = {**defaults, **context}
+    #tabbed_context = {**defaults, **context}
     templates = os.path.join(TEMPLATES, 'index.html') #adjust index file to have an if block for beta/alpha
+    print("output dir:", output_dir)
+    print("templates:", templates)
 
     copytree(
         src=TEMPLATES,
@@ -384,7 +341,7 @@ def _beta_viz(output_dir: str, max_range: list[int], kmer_run: bool, calc_array:
         dirs_exist_ok=True 
     )
    
-    q2templates.render(templates, output_dir, context=tabbed_context)
+    q2templates.render(templates, output_dir, context=context)
 
 
     
