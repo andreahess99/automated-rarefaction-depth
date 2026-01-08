@@ -136,9 +136,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
 
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
 
-
     #check if beta metric, if yes run the for loop with the specified beta metric and then call beta_viz and return the result of it
-    # currently does not work --> commented out so I can test other things without getting errors
     if metric in ['braycurtis', 'jaccard']:
         num_samples_left = [None] * (steps)
         avg_difference = [None] * (steps-1)
@@ -151,7 +149,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             beta_result, = beta_action(table=table, sampling_depth=(int(max_range[i])), metric=metric, n=iterations, replacement=False)
             num_samples_left[i] = beta_result.view(DistanceMatrix).shape[0]
 
-            if i>0:
+            if i > 0:
                 # reduce old_beta_result to only the ids present in the current beta_result
                 old_dm_full = old_beta_result.view(DistanceMatrix)
                 new_ids = list(beta_result.view(DistanceMatrix).ids)
@@ -176,12 +174,16 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             
             old_beta_result = beta_result
 
-       
-        visualization = beta_viz_action(max_range=max_range.tolist(), kmer_run=kmer_run, calc_array=avg_difference, metric=metric, algorithm=algorithm, num_samples_left=num_samples_left)
+        clean_max_range = [float(x) for x in max_range]
+        clean_avg_diff = [float(x) if x is not None else 0.0 for x in avg_difference]
+        clean_samples_left = [int(x) for x in num_samples_left]
+        visualization, = beta_viz_action(max_range=clean_max_range, kmer_run=kmer_run, calc_array=clean_avg_diff, metric=metric, algorithm=algorithm, num_samples_left=clean_samples_left)
+        
+        #visualization, = beta_viz_action(max_range=max_range.tolist(), kmer_run=kmer_run, calc_array=avg_difference, metric=metric, algorithm=algorithm, num_samples_left=num_samples_left)
         print("Returning beta visualization now.")
-        #return visualization
-        #visualization[0].save('beta-visualization.qzv')
-        return visualization[0]
+      
+        return visualization
+        
         
     #continue normally if alpha metric was chosen
     for i in range(steps):
@@ -205,7 +207,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             else:
                 pd_new.iloc[j, i] = np.nan
 
-    
     combined_df, knee_point = _rf_knee_locator(artifacts_list=pd_new, sample_list=sample_list,
                                                steps=steps, algorithm=algorithm, max_reads=max_reads)
     
@@ -224,6 +225,8 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
 #calculates the knee point and makes the visualization for beta rarefaction
 def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_array: list[float], metric: str, algorithm: str, num_samples_left: list[int])->None:
     
+    print(calc_array)
+
     print("in beta_viz")
     avg_range = [None] * (len(max_range)-1)
     for i in range(1, len(max_range)):
@@ -232,8 +235,12 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
 
     #calculate knee  point
     if algorithm == 'kneedle':
-        kneedle = KneeLocator(avg_range[1:], calc_array[1:], curve="concave", direction="decreasing", S=3)
+        kneedle = KneeLocator(avg_range[1:], calc_array[1:], curve="convex", direction="decreasing", S=3)
         knee_point = kneedle.knee
+        if knee_point is None:
+            knee_point = 0.0
+        else:
+            knee_point = float(knee_point)
         print(f"kneedle knee point: {knee_point}")
     else:
         first_derivative = np.gradient(calc_array[1:], avg_range[1:])
@@ -247,24 +254,24 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
 
     #make 2 plots again 1 scatter, 1 barplot with same functionality as alpha_viz with zoom etc
     zoom = alt.selection_interval(bind='scales')
-
+    
     param_checkbox = alt.param(
         bind=alt.binding_checkbox(name='Show read depth specified by slider as a line on the plot: ')
     )
-
+    
     s = alt.param(
         name='position', bind=alt.binding_range(min=0, max=avg_range[-1], step=20, name='Rarefaction Depth Line'), value=knee_point
     )
 
-    df = pd.DataFrame({'max_range': avg_range, 'calc_array': calc_array})
+    df = pd.DataFrame({'max_range': avg_range[1:], 'calc_array': calc_array[1:]})
     base = alt.Chart(df).mark_line(point=True).encode(
             x=alt.X('max_range:Q', title='Read Depth'),
             y=alt.Y('calc_array:Q', title='Calculated Value'), #adjust to what it is
         ).properties(
-            width=450,
-            height=350,
+            width=400,
+            height=300,
             title='Beta Rarefaction Curve'
-        ).add_selection(zoom) #was add_params before
+        ).add_params(zoom, param_checkbox) 
     
     static_line = alt.Chart(pd.DataFrame({'position': [knee_point]})).mark_rule(
         color='red', strokeWidth=2).encode(x='position:Q').properties()
@@ -272,7 +279,7 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
     moving_line = alt.Chart(pd.DataFrame({'position': [0]})).mark_rule(
         color='black', strokeWidth=2, strokeDash=[4, 4]).encode(
             x='position:Q'
-        ).add_selection(s).transform_calculate(position='position').transform_filter(param_checkbox)#was add_params(s) before
+        ).add_params(s).transform_calculate(position='position').transform_filter(param_checkbox)
     
 
     beta_rf_plot = alt.layer(base, static_line, moving_line).resolve_scale( 
@@ -286,21 +293,31 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
             x=alt.X('max_range:Q', title='Read Depth'),
             y=alt.Y('num_samples_left:Q', title='Number of Samples Left')
         ).properties(
-            width=450,
-            height=200,
+            width=400,
+            height=300,
             title='Samples Remaining per Rarefaction Depth')
 
+    # trying to fix the layout
+    text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    upper_chart = alt.vconcat(beta_rf_plot, text_lines).properties(spacing=0)
+    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    upper_chart = alt.vconcat(empty_lines, upper_chart).properties(spacing=0)
 
-    combined_chart = alt.hconcat(beta_rf_plot, bar_chart).properties(spacing=60).configure_legend(
+    text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    bar_space = alt.vconcat(bar_chart, text_lines).properties(spacing=0)
+    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    bar_space = alt.vconcat(empty_lines, bar_space).properties(spacing=0)
+
+    combined_chart = alt.hconcat(upper_chart, bar_space).properties(spacing=60).configure_legend(
         labelFontSize=14,  
         titleFontSize=14   
     )
-
+    
     combined_chart["padding"] = {
         "top": 0,
         "left": 0,
         "right": 0,
-        "bottom": -49  
+        "bottom":  0  
     }
     #define and make all necessary files & definitions
     vega_json = combined_chart.to_json() 
@@ -309,31 +326,28 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
         os.path.dirname(__file__),
         "assets"
     )
-
+    
     #add some text somewhere if kmer was run?
-    context = { #will probably need to add more variables here
+    beta_context = { #will probably need to add more variables here
         "vega_json": vega_json,
-        "beta_metric": metric,
-        "knee_point": json.dumps(knee_point),
-        "beta": True,
+        "beta_metric": (str(metric)),
+        "knee_point": (knee_point),
+        "beta": (True),
         #have all variables that are needed for alpha_viz as well with dummy values
-        "knee_point": 1,
-        "percent_samples_100": 0,
-        "depth_threshold": 0,
-        "add_text": False,
-        "percentile": 0,
-        "lower_percentile": 0,
-        "upper_percentile": 0,
-        "lower_value": 0,
-        "upper_value": 0,
-        "graph_data": "undefined",
-        "graph_name": "undefined",
-        "max_read_percentile": 0
+        "percent_samples_100": (0),
+        "depth_threshold": (0),
+        "add_text": (False),
+        "percentile": (0),
+        "lower_percentile": (0),
+        "upper_percentile": (0),
+        "lower_value": (0),
+        "upper_value": (0),
+        "graph_data": (str(metric)),
+        "graph_name": (str(metric)),
+        "max_read_percentile": (0)
     }
     #tabbed_context = {**defaults, **context}
     templates = os.path.join(TEMPLATES, 'index.html') #adjust index file to have an if block for beta/alpha
-    print("output dir:", output_dir)
-    print("templates:", templates)
 
     copytree(
         src=TEMPLATES,
@@ -341,7 +355,7 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
         dirs_exist_ok=True 
     )
    
-    q2templates.render(templates, output_dir, context=context)
+    q2templates.render(templates, output_dir, context=beta_context)
 
 
     
