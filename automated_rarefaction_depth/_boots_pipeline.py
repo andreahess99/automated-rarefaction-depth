@@ -6,7 +6,6 @@
 # The full license is in the file LICENSE, distributed with this software.
 # ----------------------------------------------------------------------------
 
-
 import json
 import os
 import numpy as np
@@ -178,13 +177,9 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         clean_avg_diff = [float(x) if x is not None else 0.0 for x in avg_difference]
         clean_samples_left = [int(x) for x in num_samples_left]
         visualization, = beta_viz_action(max_range=clean_max_range, kmer_run=kmer_run, calc_array=clean_avg_diff, metric=metric, algorithm=algorithm, num_samples_left=clean_samples_left)
-        
-        #visualization, = beta_viz_action(max_range=max_range.tolist(), kmer_run=kmer_run, calc_array=avg_difference, metric=metric, algorithm=algorithm, num_samples_left=num_samples_left)
-        print("Returning beta visualization now.")
-      
+
         return visualization
-        
-        
+         
     #continue normally if alpha metric was chosen
     for i in range(steps):
         print(f"step {i+1}: {max_range[i]}")
@@ -221,20 +216,39 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
 
     return visualization
 
+#calculates the knee point based on the chosen algorithm & metric
+def knee_point_locator(range: list[float], samples: list[float], algorithm: str, metric:str) -> float:
+    if algorithm == 'kneedle':
+        if metric == 'alpha':
+            kneedle = KneeLocator(range, samples, curve="concave", direction="increasing", S=3)
+        else:
+            kneedle = KneeLocator(range, samples, curve="convex", direction="decreasing", S=3)
+        knee_point = kneedle.knee
+    else:
+        first_derivative = np.gradient(samples, range)
+        second_derivative = np.gradient(first_derivative, range)
+        knee_point = np.argmax(second_derivative)
+        
+    #print(f"knee point: {knee_point}")
+    return knee_point
+
 
 #calculates the knee point and makes the visualization for beta rarefaction
 def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_array: list[float], metric: str, algorithm: str, num_samples_left: list[int])->None:
-    
-    print(calc_array)
-
-    print("in beta_viz")
+ 
     avg_range = [None] * (len(max_range)-1)
     for i in range(1, len(max_range)):
         avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
-        #print(f"average range between steps: {avg_range[i-1]}")
-
+    
     #calculate knee  point
-    if algorithm == 'kneedle':
+    knee_point = knee_point_locator(avg_range[1:], calc_array[1:], algorithm, "beta")
+    if knee_point is None:
+        knee_point = 0
+    else:
+        knee_point = round(float(knee_point))
+    
+    #commment this out if function works
+    """if algorithm == 'kneedle':
         kneedle = KneeLocator(avg_range[1:], calc_array[1:], curve="convex", direction="decreasing", S=3)
         knee_point = kneedle.knee
         if knee_point is None:
@@ -246,7 +260,7 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
         first_derivative = np.gradient(calc_array[1:], avg_range[1:])
         second_derivative = np.gradient(first_derivative, avg_range[1:])
         knee_point = np.argmax(second_derivative)
-        print(f"gradient knee point: {knee_point}")
+        print(f"gradient knee point: {knee_point}")"""
 
     #plotting with altair
     alt.themes.register('altair_theme', altair_theme)
@@ -254,11 +268,9 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
 
     #make 2 plots again 1 scatter, 1 barplot with same functionality as alpha_viz with zoom etc
     zoom = alt.selection_interval(bind='scales')
-    
     param_checkbox = alt.param(
         bind=alt.binding_checkbox(name='Show read depth specified by slider as a line on the plot: ')
-    )
-    
+    ) 
     s = alt.param(
         name='position', bind=alt.binding_range(min=0, max=avg_range[-1], step=20, name='Rarefaction Depth Line'), value=knee_point
     )
@@ -266,7 +278,7 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
     df = pd.DataFrame({'max_range': avg_range[1:], 'calc_array': calc_array[1:]})
     base = alt.Chart(df).mark_line(point=True).encode(
             x=alt.X('max_range:Q', title='Read Depth'),
-            y=alt.Y('calc_array:Q', title='Calculated Value'), #adjust to what it is
+            y=alt.Y('calc_array:Q', title='Calculated Value'), #adjust to what it is 
         ).properties(
             width=400,
             height=300,
@@ -303,9 +315,9 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
     empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     upper_chart = alt.vconcat(empty_lines, upper_chart).properties(spacing=0)
 
-    text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    #text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     bar_space = alt.vconcat(bar_chart, text_lines).properties(spacing=0)
-    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    #empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     bar_space = alt.vconcat(empty_lines, bar_space).properties(spacing=0)
 
     combined_chart = alt.hconcat(upper_chart, bar_space).properties(spacing=60).configure_legend(
@@ -317,7 +329,7 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
         "top": 0,
         "left": 0,
         "right": 0,
-        "bottom":  0  
+        "bottom":  -49#0  
     }
     #define and make all necessary files & definitions
     vega_json = combined_chart.to_json() 
@@ -346,7 +358,7 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
         "graph_name": (str(metric)),
         "max_read_percentile": (0)
     }
-    #tabbed_context = {**defaults, **context}
+    
     templates = os.path.join(TEMPLATES, 'index.html') #adjust index file to have an if block for beta/alpha
 
     copytree(
@@ -356,6 +368,245 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
     )
    
     q2templates.render(templates, output_dir, context=beta_context)
+
+
+# combined visualization function for alpha and beta metrics
+# to do: add this method to the plugin setup and import it in the pipeline above
+# to do: add all necessary parameters and give them default values
+# this is a copy of the _beta_viz that now gradually gets adjusted to also support alpha metrics
+def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_array: list[float], metric: str, algorithm: str, num_samples_left: list[int])->None:
+    
+    #default values for the tabbed_context
+    percent_samples_100 = 0
+    depth_threshold = 0
+    add_text = False
+    percentile = 0
+    lower_percentile = 0
+    upper_percentile = 0
+    lower_value = 0
+    upper_value = 0
+    graph_data = str(metric)
+    graph_name = str(metric)
+    max_read_percentile = 0
+    beta = False
+
+    #plotting with altair
+    alt.themes.register('altair_theme', altair_theme)
+    alt.themes.enable('altair_theme')
+    alt.data_transformers.disable_max_rows()
+
+    # beta metric specific code
+    if metric in ['braycurtis', 'jaccard']:
+        beta = True
+
+        avg_range = [None] * (len(max_range)-1)
+        for i in range(1, len(max_range)):
+            avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
+
+        max_reads = avg_range[-1]
+        line_chart_df = pd.DataFrame({'depth': avg_range[1:], 'observed_features': calc_array[1:]})
+
+        #calculate knee  point
+        knee_point = knee_point_locator(avg_range[1:], calc_array[1:], algorithm, "beta")
+        if knee_point is None:
+            knee_point = 0
+        else:
+            knee_point = round(float(knee_point))
+
+    #alpha metric specific code
+    else:
+        combined_df['sample'] = sample_names
+        line_chart_df = combined_df
+        sorted_depths = pd.Series(sorted_depths)
+        reads_per_sample = pd.DataFrame(reads_per_sample)
+
+        #finding +-5% points & at what percentile knee point is
+        index = np.searchsorted(sorted_depths, knee_point)
+        percentile = round((index / len(sorted_depths)) * 100, 2)
+        lower_percentile = max(percentile - 5, 0) 
+        upper_percentile = min(percentile + 5, 100) 
+        lower_index = int((lower_percentile / 100) * len(sorted_depths))
+        upper_index = min(int((upper_percentile / 100) * len(sorted_depths)), len(sorted_depths) - 1)
+        lower_value = round(sorted_depths.iloc[lower_index])
+        upper_value = round(sorted_depths.iloc[upper_index])
+        percent_samples_100 = round(percent_samples * 100, 2)
+
+        depth_lines = pd.DataFrame({
+            'x': [lower_value, knee_point, upper_value],  
+            'label': ['-5%', 'Knee point', '+5%']  
+        })
+
+        reads_per_sample_df = reads_per_sample.reset_index()
+        reads_per_sample_df.columns = ['sample', 'reads_per_sample']
+   
+    # specify names and titles according to what was run
+    # to do: extend & adjust the alpha version as necessary
+    if kmer_run:
+        title_x = 'Total Kmer Count'
+        title_y = '# Observed Distinct Kmers'
+        graph_data = "number of observed kmers"
+        graph_name = "Kmers"
+        barplot_title = 'Kmers per Sample'
+        property_title = 'Histogram of Kmers per Sample'
+    else:
+        title_x = 'Read Depth'
+        title_y = '# Observed Features'
+        graph_data = "number of observed features"
+        graph_name = "Reads"
+        barplot_title = 'Reads per Sample'
+        property_title = 'Histogram of Reads per Sample'
+
+    if metric == 'shannon':
+        title_y = 'Shannon Index'
+        graph_data = "Shannon Index"
+
+
+    #make 2 plots a 1 line plot, 1 barplot
+    zoom = alt.selection_interval(bind='scales')
+    param_checkbox = alt.param(
+        bind=alt.binding_checkbox(name='Show read depth specified by slider as a line on the plot: ')) 
+    s = alt.param(
+        name='position', bind=alt.binding_range(min=0, max=max_reads, step=20, name='Rarefaction Depth Line'), value=knee_point)
+
+    #adjust titles here
+    base = alt.Chart(line_chart_df).mark_line(point=True).encode(
+            x=alt.X('depth:Q', title='Read Depth'),
+            y=alt.Y('observed_features:Q', title='Calculated Value'), #adjust to what it is
+            color=alt.Color('sample:N', legend=None).scale(scheme='category10')
+        ).properties(
+            width=450, #400
+            height=350, #300
+            title='Beta Rarefaction Curve' #title
+        ).add_params(zoom, param_checkbox) 
+    
+    moving_line = alt.Chart(pd.DataFrame({'position': [0]})).mark_rule(
+            color='black', strokeWidth=2, strokeDash=[4, 4]).encode(
+                x='position:Q'
+            ).add_params(s).transform_calculate(position='position'
+            ).transform_filter(param_checkbox)
+
+    if beta:
+        static_line = alt.Chart(pd.DataFrame({'position': [knee_point]})).mark_rule(
+            color='red', strokeWidth=2).encode(x='position:Q').properties()
+        final_chart = alt.layer(base, static_line).resolve_scale(x='shared', y='shared')
+
+    else:
+        shaded_area = alt.Chart(pd.DataFrame({
+            'x_min': [0],
+            'x_max': [depth_threshold]
+        })).mark_rect(opacity=0.7, color='peachpuff').encode(
+            x='x_min:Q',
+            x2='x_max:Q'
+        )
+        my_colors = ["#377eb8", "#f781bf", "#984ea3"]
+
+        vertical_lines = alt.Chart(depth_lines).mark_rule(strokeWidth=2).encode(
+            x='x:Q',
+            color=alt.Color('label:N', legend=alt.Legend(title="Thresholds"), scale=alt.Scale(range=my_colors))
+        )
+        final_chart = alt.layer(
+            shaded_area, base, vertical_lines
+        ).resolve_scale(
+            x='shared',
+            color='independent'
+        ).properties(
+            title='Rarefaction Curves',
+            width=450,
+            height=350
+        )
+    
+    rf_line_plot = alt.layer(final_chart, moving_line).resolve_scale( 
+        x='shared',
+        y='shared'
+    )
+
+    #barplot
+    if beta:
+        #need to adjust this df, it shows the wrong thing
+        df_bars = pd.DataFrame({'depth': max_range, 'num_samples_left': num_samples_left})
+        barplot = alt.Chart(df_bars).mark_bar(color='steelblue').encode(
+                x=alt.X('depth:Q', title='Read Depth'),
+                y=alt.Y('num_samples_left:Q', title='Number of Samples Left')
+            ).properties(
+                width=400,
+                height=300,
+                title='Samples Remaining per Rarefaction Depth')
+
+    else:
+        predicate = alt.datum.reads_per_sample >= s 
+        barplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
+            x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title=barplot_title),
+            y=alt.Y('count()', title='# Samples'),
+            color=alt.value('steelblue')  
+        ).add_params(s, zoom).transform_filter(predicate).transform_calculate(position='position'
+        ).properties(title=property_title, width=450, height=350)
+
+        background = alt.Chart(reads_per_sample_df).mark_bar().encode(
+            x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title=barplot_title),  
+            y=alt.Y('count()', title='# Samples'),
+            color=alt.value('lightgrey')
+        ).add_params(zoom).properties(title=property_title, width=450, height=350)
+
+        barplot = alt.layer(background, barplot).resolve_scale(x='shared', y='shared')
+
+    text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    upper_chart = alt.vconcat(rf_line_plot, text_lines).properties(spacing=0)
+    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    upper_chart = alt.vconcat(empty_lines, upper_chart).properties(spacing=0)
+
+    bar_space = alt.vconcat(barplot, text_lines).properties(spacing=0)
+    bar_space = alt.vconcat(empty_lines, bar_space).properties(spacing=0)
+
+    combined_chart = alt.hconcat(upper_chart, bar_space).properties(spacing=60).configure_legend(
+        labelFontSize=14,  
+        titleFontSize=14   
+    )
+    
+    combined_chart["padding"] = {
+        "top": 0,
+        "left": 0,
+        "right": 0,
+        "bottom":  -49  
+    }
+    #define and make all necessary files & definitions
+    vega_json = combined_chart.to_json() 
+
+    TEMPLATES = os.path.join(
+        os.path.dirname(__file__),
+        "assets"
+    )
+
+    if (knee_point > depth_threshold) and (not beta):
+        add_text = True
+
+    #add some text somewhere if kmer was run?
+    tabbed_context = { #will probably need to add more variables here
+        "vega_json": vega_json,
+        "beta_metric": (str(metric)),
+        "knee_point": (knee_point),
+        "beta": beta,
+        "percent_samples_100": json.dumps(float(percent_samples_100)),
+        "depth_threshold": json.dumps(int(depth_threshold)),
+        "add_text": bool(add_text),
+        "percentile": json.dumps(float(percentile)),
+        "lower_percentile": json.dumps(float(lower_percentile)),
+        "upper_percentile": json.dumps(float(upper_percentile)),
+        "lower_value": json.dumps(float(lower_value)),
+        "upper_value": json.dumps(float(upper_value)),
+        "graph_data": graph_data,
+        "graph_name": graph_name,
+        "max_read_percentile": json.dumps(int(max_read_percentile))
+    }
+    
+    templates = os.path.join(TEMPLATES, 'index.html') #adjust index file to have an if block for beta/alpha
+
+    copytree(
+        src=TEMPLATES,
+        dst=output_dir,
+        dirs_exist_ok=True 
+    )
+   
+    q2templates.render(templates, output_dir, context=tabbed_context)
 
 
     
@@ -371,8 +622,9 @@ def _rf_knee_locator(artifacts_list: pd.DataFrame, sample_list: list[str], steps
 
         sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample, 'sample': sample})
         df_list.append(sample_df)
-    
-        if(algorithm == 'kneedle'):
+
+        knee_points[i] = knee_point_locator(max_range, array_sample, algorithm, "alpha")
+        """if(algorithm == 'kneedle'):
             #using KneeLocator to find the knee point
             kneedle = KneeLocator(max_range, array_sample, curve="concave", direction="increasing", S=3)
             knee_points[i] = kneedle.knee
@@ -382,6 +634,7 @@ def _rf_knee_locator(artifacts_list: pd.DataFrame, sample_list: list[str], steps
             second_derivative = np.gradient(first_derivative, max_range)
             max_index = np.argmax(second_derivative)
             knee_points[i] = max_range[max_index]
+        print(knee_points[i])"""
 
     combined_df = pd.concat(df_list, ignore_index=True)
     
@@ -394,7 +647,6 @@ def _rf_knee_locator(artifacts_list: pd.DataFrame, sample_list: list[str], steps
 
     
 
-
 def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_samples: float, reads_per_sample: list[int], sorted_depths: list[int],
                          metric: str, max_reads: int, depth_threshold: int, knee_point: int, kmer_run: bool, combined_df: pd.DataFrame,
                          max_read_percentile: int)-> None: 
@@ -405,7 +657,7 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
 
     #finding +-5% points & at what percentile knee point is
     index = np.searchsorted(sorted_depths, knee_point)
-    percentile = (index / len(sorted_depths)) * 100
+    percentile = round((index / len(sorted_depths)) * 100, 2)
 
     lower_percentile = max(percentile - 5, 0) 
     upper_percentile = min(percentile + 5, 100) 
@@ -413,8 +665,10 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
     lower_index = int((lower_percentile / 100) * len(sorted_depths))
     upper_index = min(int((upper_percentile / 100) * len(sorted_depths)), len(sorted_depths) - 1)
 
-    lower_value = sorted_depths.iloc[lower_index]
-    upper_value = sorted_depths.iloc[upper_index]
+    lower_value = round(sorted_depths.iloc[lower_index])
+    upper_value = round(sorted_depths.iloc[upper_index])
+
+    percent_samples_100 = round(percent_samples * 100, 2)
 
     #plotting with altair
     #register and enable the defined theme
@@ -434,12 +688,10 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
     zoom = alt.selection_interval(bind='scales')
 
     param_checkbox = alt.param(
-        bind=alt.binding_checkbox(name='Show read depth specified by slider as a line on the plot: ')
-    )
+        bind=alt.binding_checkbox(name='Show read depth specified by slider as a line on the plot: '))
 
     s = alt.param(
-        name='position', bind=alt.binding_range(min=0, max=max_reads, step=20, name='Rarefaction Depth Line'), value=knee_point
-    )
+        name='position', bind=alt.binding_range(min=0, max=max_reads, step=20, name='Rarefaction Depth Line'), value=knee_point)
 
     if kmer_run:
         title_x = 'Total Kmer Count'
@@ -463,13 +715,11 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
     chart = alt.Chart(combined_df).mark_line(point=True).encode( 
         x=alt.X('depth:Q', title=title_x),
         y=alt.Y('observed_features:Q', title=title_y),
-        color=alt.Color('sample:N', legend=None).scale(scheme='category10')  
+        color=alt.Color('sample:N', legend=None).scale(scheme='category10')
     ).add_params(
-        zoom,
-        param_checkbox
+        zoom, param_checkbox
     ).properties(
-        title='Rarefaction Curves'
-    )
+        title='Rarefaction Curves')
 
     shaded_area = alt.Chart(pd.DataFrame({
         'x_min': [0],
@@ -498,17 +748,11 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
     
     vertical_line = alt.Chart(pd.DataFrame({'position': [0]})).mark_rule(color='black', strokeWidth=2).encode(
         x='position:Q'
-    ).add_params(
-        s
-    ).transform_calculate(
-        position='position'
-    ).transform_filter(
-        param_checkbox
+    ).add_params(s).transform_calculate(position='position').transform_filter(param_checkbox
     ).properties(
         title='Interactive Vertical Line',
         width=450, 
-        height=350 
-    )
+        height=350)
     
     final_with_line = alt.layer(final_chart, vertical_line).resolve_scale( 
         x='shared',
@@ -557,6 +801,8 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
         y='shared'
     )
     
+    text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
+    barplot_combined = alt.vconcat(barplot_combined, text_lines).properties(spacing=0)
     empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95, dy=-5).encode(text='text:N').properties(width=100, height=50)
     barplot_combined = alt.vconcat(empty_lines, barplot_combined).properties(spacing=0)
 
@@ -582,13 +828,6 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
     add_text = False
     if (knee_point > depth_threshold):
         add_text = True
-
-    percent_samples_100 = round(percent_samples * 100, 2)
-    percentile = round(percentile, 2)
-    lower_percentile = round(lower_percentile, 2)
-    upper_percentile = round(upper_percentile, 2)
-    lower_value = round(lower_value, 0)
-    upper_value = round(upper_value, 0)
 
     tabbed_context = {
         "vega_json": vega_json,

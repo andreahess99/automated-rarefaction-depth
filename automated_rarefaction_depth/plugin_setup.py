@@ -65,7 +65,7 @@ plugin.pipelines.register_function(
                 'meta_data': Metadata, #added for testing working with metadata
                 'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
-                'steps': Int % Range(10, 100),  
+                'steps': Int % Range(5, 100), # change back to 10 later!!  
                 'algorithm': Str % Choices("kneedle", "gradient"),
                 'seed': Int % Range(1, None),
                 'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard']), #
