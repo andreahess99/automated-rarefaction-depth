@@ -12,7 +12,7 @@ from qiime2.plugin import (Plugin, Str, Choices, Int, Bool, Range, Float, List,
 from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.feature_data import FeatureData, Sequence
 from automated_rarefaction_depth import __version__
-from automated_rarefaction_depth._boots_pipeline import pipeline_boots, _rf_visualizer_boots, _beta_viz
+from automated_rarefaction_depth._boots_pipeline import pipeline_boots, _rf_visualizer_boots, _beta_viz, _combined_viz
 
 
 citations = Citations.load("citations.bib", package="automated_rarefaction_depth")
@@ -174,4 +174,48 @@ plugin.visualizers.register_function(
     description=("Calculates the knee point and produces the visualization for beta metrics."),
     citations=citations,
 )
+
+#combined visualizer
+plugin.visualizers.register_function(
+    function=_combined_viz,
+    inputs={'combined_df': FeatureTable[Frequency]},
+    parameters={'sorted_depths': List[Int],
+                'percent_samples_100': Float,
+                'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard']),
+                'max_reads': Int % Range(1, None),
+                'max_read_percentile': Int % Range(1, 100),
+                'depth_threshold': Int % Range(1, None),
+                'reads_per_sample': List[Int],
+                'kmer_run': Bool,
+                'knee_point': Int,
+                'sample_names': List[Str], 
+                'max_range': List[Float],
+                'algorithm': Str % Choices(['kneedle', 'gradient']),
+                'calc_array': List[Float],
+                'num_samples_left': List[Int]
+                },
+    input_descriptions={
+        'combined_df': 'A table containing the number of distinct features that were found in a sample at a specific depth.'
+    },
+    parameter_descriptions={
+        'sample_names': 'A list of all sample names.',
+        'sorted_depths': 'A list of sorted depths as integers.',
+        'max_read_percentile': 'The maximum read depth percentile used for linearly spacing the evaluated depths.',
+        'percent_samples_100': 'The minimal percentage of samples you want to keep, between 0 and 100.',
+        'reads_per_sample': 'A list of how many reads each sample has.',
+        'metric': 'The alpha or beta diversity metric to use for the rarefaction curves. Either observed_features, shannon, braycurtis, or jaccard.',
+        'max_reads': 'The maximum amount of reads a single sample has.',
+        'depth_threshold': 'The highest read_depth to still be within the accepted area.', 
+        'knee_point': 'The knee point of the rarefaction curve, used to determine the optimal rarefaction depth.',
+        'kmer_run': 'True if the pipeline was run with the kmerizer, False otherwise.',
+        'algorithm': "The algorithm which was chosen for the knee point calculation, kneedle or gradient",
+        'max_range': 'The different read depths at which the distance matrix was calculated.',
+        'calc_array': 'The array of the calculated points.',
+        'num_samples_left': "This array contains how many samples are considered at the considered read depths."
+    },
+    name='Automated Rarefaction Depth',
+    description=("Makes the graphs and produces the visualization for both alpha and beta diversity metrics."),
+    citations=citations,
+)
+
 

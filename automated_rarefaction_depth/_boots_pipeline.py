@@ -84,6 +84,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     kmer_action = ctx.get_action('kmerizer', 'seqs_to_kmers')
     viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
     beta_viz_action = ctx.get_action('rarefaction-depth', '_beta_viz')
+    viz_combined_action = ctx.get_action('rarefaction-depth', '_combined_viz')
 
     table_df = table.view(pd.DataFrame)
 
@@ -176,43 +177,49 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         clean_max_range = [float(x) for x in max_range]
         clean_avg_diff = [float(x) if x is not None else 0.0 for x in avg_difference]
         clean_samples_left = [int(x) for x in num_samples_left]
-        visualization, = beta_viz_action(max_range=clean_max_range, kmer_run=kmer_run, calc_array=clean_avg_diff, metric=metric, algorithm=algorithm, num_samples_left=clean_samples_left)
-
-        return visualization
-         
-    #continue normally if alpha metric was chosen
-    for i in range(steps):
-        print(f"step {i+1}: {max_range[i]}")
-        result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
-        artifacts_list.append(result)
-
-    pd_new = pd.DataFrame(
-        np.nan,  
-        index=table_df.index, 
-        columns=[f"Step_{j+1}" for j in range(steps)]  
-    )
+        #original beta visualization function call
+        #visualization, = beta_viz_action(max_range=clean_max_range, kmer_run=kmer_run, calc_array=clean_avg_diff, metric=metric, algorithm=algorithm, num_samples_left=clean_samples_left)
+        #new combined visualization function call
+        visualization, = viz_combined_action(max_range=clean_max_range, kmer_run=kmer_run, calc_array=clean_avg_diff, metric=metric, algorithm=algorithm, num_samples_left=clean_samples_left)
     
-    dfs = []
-    for i, artifact in enumerate(artifacts_list):
-        df = artifact.view(pd.Series).to_frame(name='observed_features')
-        dfs.append(df)
-        for j, sample in enumerate(sample_list):
-            if sample in df.index:
-                pd_new.iloc[j, i] = df.loc[sample].values[0].round().astype(int)
-            else:
-                pd_new.iloc[j, i] = np.nan
+    else:
+        #if alpha metric was chosen
+        for i in range(steps):
+            print(f"step {i+1}: {max_range[i]}")
+            result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
+            artifacts_list.append(result)
 
-    combined_df, knee_point = _rf_knee_locator(artifacts_list=pd_new, sample_list=sample_list,
-                                               steps=steps, algorithm=algorithm, max_reads=max_reads)
+        pd_new = pd.DataFrame(
+            np.nan,  
+            index=table_df.index, 
+            columns=[f"Step_{j+1}" for j in range(steps)]  
+        )
     
-    sample_names = combined_df.iloc[:, -1].tolist()
-    combined_df = combined_df.drop(combined_df.columns[-1], axis=1)
+        dfs = []
+        for i, artifact in enumerate(artifacts_list):
+            df = artifact.view(pd.Series).to_frame(name='observed_features')
+            dfs.append(df)
+            for j, sample in enumerate(sample_list):
+                if sample in df.index:
+                    pd_new.iloc[j, i] = df.loc[sample].values[0].round().astype(int)
+                else:
+                    pd_new.iloc[j, i] = np.nan
 
-    combined_df.index = combined_df.index.astype(str)
-    combined_artifact = qiime2.Artifact.import_data("FeatureTable[Frequency]", combined_df)
+        combined_df, knee_point = _rf_knee_locator(artifacts_list=pd_new, sample_list=sample_list,
+                                                steps=steps, algorithm=algorithm, max_reads=max_reads)
+        
+        sample_names = combined_df.iloc[:, -1].tolist()
+        combined_df = combined_df.drop(combined_df.columns[-1], axis=1)
 
-    visualization, = viz_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
-                    sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile)
+        combined_df.index = combined_df.index.astype(str)
+        combined_artifact = qiime2.Artifact.import_data("FeatureTable[Frequency]", combined_df)
+
+        percent_samples_100 = round(percent_samples * 100, 2)
+
+        visualization, = viz_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
+                        sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile)
+        #visualization, = viz_combined_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
+        #                sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile)
 
     return visualization
 
@@ -227,14 +234,13 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
     else:
         first_derivative = np.gradient(samples, range)
         second_derivative = np.gradient(first_derivative, range)
-        knee_point = np.argmax(second_derivative)
-        
+        knee_point = np.argmax(second_derivative)   
     #print(f"knee point: {knee_point}")
     return knee_point
 
 
 #calculates the knee point and makes the visualization for beta rarefaction
-def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_array: list[float], metric: str, algorithm: str, num_samples_left: list[int])->None:
+def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_array: list[float] , metric: str, algorithm: str, num_samples_left: list[int])->None:
  
     avg_range = [None] * (len(max_range)-1)
     for i in range(1, len(max_range)):
@@ -371,14 +377,15 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
 
 
 # combined visualization function for alpha and beta metrics
-# to do: add this method to the plugin setup and import it in the pipeline above
-# to do: add all necessary parameters and give them default values
+# to do: specify plot titles and axes titles etc according to what is being plotted
+# to do: change allowed number of steps back in plugin_setup 
+# to do: make sure line plot and barplot are aligned properly (y-axis!)
+# to do: add text to beta visualization
 # this is a copy of the _beta_viz that now gradually gets adjusted to also support alpha metrics
-def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_array: list[float], metric: str, algorithm: str, num_samples_left: list[int])->None:
+def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, calc_array: list[float] = None, algorithm: str = "kneedle", num_samples_left: list[int] = None, sample_names: list[str] = None,
+                  percent_samples_100: float = 0, reads_per_sample: list[int] = None, sorted_depths: list[int] = None, max_reads: int = 1, depth_threshold: int = 1, knee_point: int = 0, max_read_percentile: int = 1, combined_df: pd.DataFrame = None)->None:
     
     #default values for the tabbed_context
-    percent_samples_100 = 0
-    depth_threshold = 0
     add_text = False
     percentile = 0
     lower_percentile = 0
@@ -387,7 +394,6 @@ def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_
     upper_value = 0
     graph_data = str(metric)
     graph_name = str(metric)
-    max_read_percentile = 0
     beta = False
 
     #plotting with altair
@@ -398,6 +404,7 @@ def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_
     # beta metric specific code
     if metric in ['braycurtis', 'jaccard']:
         beta = True
+        line_plot_title = 'Beta Rarefaction Curve'
 
         avg_range = [None] * (len(max_range)-1)
         for i in range(1, len(max_range)):
@@ -415,6 +422,7 @@ def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_
 
     #alpha metric specific code
     else:
+        line_plot_title = 'Rarefaction Curves'
         combined_df['sample'] = sample_names
         line_chart_df = combined_df
         sorted_depths = pd.Series(sorted_depths)
@@ -429,7 +437,6 @@ def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_
         upper_index = min(int((upper_percentile / 100) * len(sorted_depths)), len(sorted_depths) - 1)
         lower_value = round(sorted_depths.iloc[lower_index])
         upper_value = round(sorted_depths.iloc[upper_index])
-        percent_samples_100 = round(percent_samples * 100, 2)
 
         depth_lines = pd.DataFrame({
             'x': [lower_value, knee_point, upper_value],  
@@ -440,7 +447,7 @@ def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_
         reads_per_sample_df.columns = ['sample', 'reads_per_sample']
    
     # specify names and titles according to what was run
-    # to do: extend & adjust the alpha version as necessary
+    # to do: extend & adjust the beta version as necessary
     if kmer_run:
         title_x = 'Total Kmer Count'
         title_y = '# Observed Distinct Kmers'
@@ -459,6 +466,10 @@ def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_
     if metric == 'shannon':
         title_y = 'Shannon Index'
         graph_data = "Shannon Index"
+    if beta:
+        title_y = 'Distance'
+        graph_data = "Distance"
+        #do I need more ones here?
 
 
     #make 2 plots a 1 line plot, 1 barplot
@@ -468,15 +479,14 @@ def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_
     s = alt.param(
         name='position', bind=alt.binding_range(min=0, max=max_reads, step=20, name='Rarefaction Depth Line'), value=knee_point)
 
-    #adjust titles here
     base = alt.Chart(line_chart_df).mark_line(point=True).encode(
-            x=alt.X('depth:Q', title='Read Depth'),
-            y=alt.Y('observed_features:Q', title='Calculated Value'), #adjust to what it is
+            x=alt.X('depth:Q', title=title_x), #, scale=alt.Scale(domainMin=0)
+            y=alt.Y('observed_features:Q', title=title_y),
             color=alt.Color('sample:N', legend=None).scale(scheme='category10')
         ).properties(
-            width=450, #400
-            height=350, #300
-            title='Beta Rarefaction Curve' #title
+            width=450,
+            height=350,
+            title=line_plot_title
         ).add_params(zoom, param_checkbox) 
     
     moving_line = alt.Chart(pd.DataFrame({'position': [0]})).mark_rule(
@@ -488,7 +498,7 @@ def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_
     if beta:
         static_line = alt.Chart(pd.DataFrame({'position': [knee_point]})).mark_rule(
             color='red', strokeWidth=2).encode(x='position:Q').properties()
-        final_chart = alt.layer(base, static_line).resolve_scale(x='shared', y='shared')
+        final_chart = alt.layer(base, static_line).resolve_scale(x='shared', y='shared').encode(x=alt.X(scale=alt.Scale(domainMin=0)))
 
     else:
         shaded_area = alt.Chart(pd.DataFrame({
@@ -523,14 +533,12 @@ def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_
     #barplot
     if beta:
         #need to adjust this df, it shows the wrong thing
-        df_bars = pd.DataFrame({'depth': max_range, 'num_samples_left': num_samples_left})
+        #df_bars = pd.DataFrame({'depth': max_range, 'num_samples_left': num_samples_left})
+        df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
         barplot = alt.Chart(df_bars).mark_bar(color='steelblue').encode(
-                x=alt.X('depth:Q', title='Read Depth'),
+                x=alt.X('depth:Q', title='Read Depth', scale=alt.Scale(domainMin=0)),
                 y=alt.Y('num_samples_left:Q', title='Number of Samples Left')
-            ).properties(
-                width=400,
-                height=300,
-                title='Samples Remaining per Rarefaction Depth')
+            ).add_params(zoom).properties(width=450, height=350, title='Samples Remaining at each Rarefaction Depth')
 
     else:
         predicate = alt.datum.reads_per_sample >= s 
@@ -568,7 +576,7 @@ def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_
         "right": 0,
         "bottom":  -49  
     }
-    #define and make all necessary files & definitions
+   
     vega_json = combined_chart.to_json() 
 
     TEMPLATES = os.path.join(
@@ -580,7 +588,8 @@ def _combined_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_
         add_text = True
 
     #add some text somewhere if kmer was run?
-    tabbed_context = { #will probably need to add more variables here
+    #add some text to beta visualization
+    tabbed_context = {
         "vega_json": vega_json,
         "beta_metric": (str(metric)),
         "knee_point": (knee_point),
