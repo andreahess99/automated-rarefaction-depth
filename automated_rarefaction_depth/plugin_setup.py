@@ -65,7 +65,7 @@ plugin.pipelines.register_function(
                 'meta_data': Metadata, #added for testing working with metadata
                 'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
-                'steps': Int % Range(5, 100), # change back to 10 later!!  
+                'steps': Int % Range(10, 100), 
                 'algorithm': Str % Choices("kneedle", "gradient"),
                 'seed': Int % Range(1, None),
                 'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard']), #
@@ -128,7 +128,8 @@ plugin.visualizers.register_function(
                 'reads_per_sample': List[Int],
                 'kmer_run': Bool,
                 'knee_point': Int,
-                'sample_names': List[Str]
+                'sample_names': List[Str],
+                'algorithm': Str % Choices(['kneedle', 'gradient'])
                 },
     input_descriptions={
         'combined_df': 'A table containing the number of distinct features that were found in a sample at a specific depth.'

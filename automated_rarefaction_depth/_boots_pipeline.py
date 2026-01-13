@@ -82,15 +82,15 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     alpha_action = ctx.get_action('boots', 'alpha')
     beta_action = ctx.get_action('boots', 'beta')
     kmer_action = ctx.get_action('kmerizer', 'seqs_to_kmers')
-    viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
-    beta_viz_action = ctx.get_action('rarefaction-depth', '_beta_viz')
+    #viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
+    #beta_viz_action = ctx.get_action('rarefaction-depth', '_beta_viz')
     viz_combined_action = ctx.get_action('rarefaction-depth', '_combined_viz')
 
     table_df = table.view(pd.DataFrame)
 
     # if grouping with a metadata category is wanted, use this code to do it
-    meta = meta_data.to_dataframe()
-    """sample_ids = meta[meta['extract-group-no'] == 'H'].index.tolist()
+    """meta = meta_data.to_dataframe()
+    sample_ids = meta[meta['extract-group-no'] == 'H'].index.tolist()
     print("Samples with H:", sample_ids)
     #filtering table according to metadata --> test different things
     table_df = table_df.loc[sample_ids]"""
@@ -136,7 +136,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
 
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
 
-    #check if beta metric, if yes run the for loop with the specified beta metric and then call beta_viz and return the result of it
+    # beta metric specific code
     if metric in ['braycurtis', 'jaccard']:
         num_samples_left = [None] * (steps)
         avg_difference = [None] * (steps-1)
@@ -164,13 +164,13 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 difference = np.abs(new_dm.data - old_dm.data)
                 
                 avg_difference[i-1] = np.mean(difference[np.triu_indices_from(difference, k=1)])
-                print(f"average difference to previous step: {avg_difference[i-1]}")
+                #print(f"average difference to previous step: {avg_difference[i-1]}")
                 median_difference[i-1] = np.median(difference[np.triu_indices_from(difference, k=1)])
                 std_difference[i-1] = np.std(difference[np.triu_indices_from(difference, k=1)])
                 p75_25_difference[i-1] = np.percentile(difference[np.triu_indices_from(difference, k=1)], 75) - np.percentile(difference[np.triu_indices_from(difference, k=1)], 25)
 
                 avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
-                print(f"average range between steps: {avg_range[i-1]}")
+                #print(f"average range between steps: {avg_range[i-1]}")
             
             old_beta_result = beta_result
 
@@ -216,10 +216,10 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
 
         percent_samples_100 = round(percent_samples * 100, 2)
 
-        visualization, = viz_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
-                        sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile)
-        #visualization, = viz_combined_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
-        #                sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile)
+        #visualization, = viz_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
+        #                sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm)
+        visualization, = viz_combined_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
+                        sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm)
 
     return visualization
 
@@ -235,7 +235,6 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
         first_derivative = np.gradient(samples, range)
         second_derivative = np.gradient(first_derivative, range)
         knee_point = np.argmax(second_derivative)   
-    #print(f"knee point: {knee_point}")
     return knee_point
 
 
@@ -252,21 +251,6 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
         knee_point = 0
     else:
         knee_point = round(float(knee_point))
-    
-    #commment this out if function works
-    """if algorithm == 'kneedle':
-        kneedle = KneeLocator(avg_range[1:], calc_array[1:], curve="convex", direction="decreasing", S=3)
-        knee_point = kneedle.knee
-        if knee_point is None:
-            knee_point = 0.0
-        else:
-            knee_point = float(knee_point)
-        print(f"kneedle knee point: {knee_point}")
-    else:
-        first_derivative = np.gradient(calc_array[1:], avg_range[1:])
-        second_derivative = np.gradient(first_derivative, avg_range[1:])
-        knee_point = np.argmax(second_derivative)
-        print(f"gradient knee point: {knee_point}")"""
 
     #plotting with altair
     alt.themes.register('altair_theme', altair_theme)
@@ -300,10 +284,7 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
         ).add_params(s).transform_calculate(position='position').transform_filter(param_checkbox)
     
 
-    beta_rf_plot = alt.layer(base, static_line, moving_line).resolve_scale( 
-        x='shared',
-        y='shared'
-    )
+    beta_rf_plot = alt.layer(base, static_line, moving_line).resolve_scale(x='shared', y='shared')
 
     #barplot
     df_bars = pd.DataFrame({'max_range': max_range, 'num_samples_left': num_samples_left})
@@ -321,9 +302,7 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
     empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     upper_chart = alt.vconcat(empty_lines, upper_chart).properties(spacing=0)
 
-    #text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     bar_space = alt.vconcat(bar_chart, text_lines).properties(spacing=0)
-    #empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     bar_space = alt.vconcat(empty_lines, bar_space).properties(spacing=0)
 
     combined_chart = alt.hconcat(upper_chart, bar_space).properties(spacing=60).configure_legend(
@@ -346,12 +325,12 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
     )
     
     #add some text somewhere if kmer was run?
-    beta_context = { #will probably need to add more variables here
+    beta_context = { 
         "vega_json": vega_json,
         "beta_metric": (str(metric)),
         "knee_point": (knee_point),
         "beta": (True),
-        #have all variables that are needed for alpha_viz as well with dummy values
+        "algorithm": (str(algorithm)),
         "percent_samples_100": (0),
         "depth_threshold": (0),
         "add_text": (False),
@@ -365,7 +344,7 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
         "max_read_percentile": (0)
     }
     
-    templates = os.path.join(TEMPLATES, 'index.html') #adjust index file to have an if block for beta/alpha
+    templates = os.path.join(TEMPLATES, 'index.html')
 
     copytree(
         src=TEMPLATES,
@@ -377,11 +356,7 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
 
 
 # combined visualization function for alpha and beta metrics
-# to do: specify plot titles and axes titles etc according to what is being plotted
-# to do: change allowed number of steps back in plugin_setup 
-# to do: make sure line plot and barplot are aligned properly (y-axis!)
-# to do: add text to beta visualization
-# this is a copy of the _beta_viz that now gradually gets adjusted to also support alpha metrics
+# to do: add some text somewhere if kmer was run?
 def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, calc_array: list[float] = None, algorithm: str = "kneedle", num_samples_left: list[int] = None, sample_names: list[str] = None,
                   percent_samples_100: float = 0, reads_per_sample: list[int] = None, sorted_depths: list[int] = None, max_reads: int = 1, depth_threshold: int = 1, knee_point: int = 0, max_read_percentile: int = 1, combined_df: pd.DataFrame = None)->None:
     
@@ -447,7 +422,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         reads_per_sample_df.columns = ['sample', 'reads_per_sample']
    
     # specify names and titles according to what was run
-    # to do: extend & adjust the beta version as necessary
     if kmer_run:
         title_x = 'Total Kmer Count'
         title_y = '# Observed Distinct Kmers'
@@ -469,7 +443,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     if beta:
         title_y = 'Distance'
         graph_data = "Distance"
-        #do I need more ones here?
 
 
     #make 2 plots a 1 line plot, 1 barplot
@@ -480,7 +453,7 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         name='position', bind=alt.binding_range(min=0, max=max_reads, step=20, name='Rarefaction Depth Line'), value=knee_point)
 
     base = alt.Chart(line_chart_df).mark_line(point=True).encode(
-            x=alt.X('depth:Q', title=title_x), #, scale=alt.Scale(domainMin=0)
+            x=alt.X('depth:Q', title=title_x),
             y=alt.Y('observed_features:Q', title=title_y),
             color=alt.Color('sample:N', legend=None).scale(scheme='category10')
         ).properties(
@@ -490,7 +463,7 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         ).add_params(zoom, param_checkbox) 
     
     moving_line = alt.Chart(pd.DataFrame({'position': [0]})).mark_rule(
-            color='black', strokeWidth=2, strokeDash=[4, 4]).encode(
+            color='black', strokeWidth=2, strokeDash=[2, 2]).encode( 
                 x='position:Q'
             ).add_params(s).transform_calculate(position='position'
             ).transform_filter(param_checkbox)
@@ -502,12 +475,10 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
 
     else:
         shaded_area = alt.Chart(pd.DataFrame({
-            'x_min': [0],
-            'x_max': [depth_threshold]
+            'x_min': [0], 'x_max': [depth_threshold]
         })).mark_rect(opacity=0.7, color='peachpuff').encode(
-            x='x_min:Q',
-            x2='x_max:Q'
-        )
+            x='x_min:Q', x2='x_max:Q')
+        
         my_colors = ["#377eb8", "#f781bf", "#984ea3"]
 
         vertical_lines = alt.Chart(depth_lines).mark_rule(strokeWidth=2).encode(
@@ -517,22 +488,14 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         final_chart = alt.layer(
             shaded_area, base, vertical_lines
         ).resolve_scale(
-            x='shared',
-            color='independent'
+            x='shared', color='independent'
         ).properties(
-            title='Rarefaction Curves',
-            width=450,
-            height=350
-        )
+            title='Rarefaction Curves', width=450, height=350)
     
-    rf_line_plot = alt.layer(final_chart, moving_line).resolve_scale( 
-        x='shared',
-        y='shared'
-    )
+    rf_line_plot = alt.layer(final_chart, moving_line).resolve_scale(x='shared', y='shared')
 
     #barplot
     if beta:
-        #need to adjust this df, it shows the wrong thing
         #df_bars = pd.DataFrame({'depth': max_range, 'num_samples_left': num_samples_left})
         df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
         barplot = alt.Chart(df_bars).mark_bar(color='steelblue').encode(
@@ -565,10 +528,7 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     bar_space = alt.vconcat(barplot, text_lines).properties(spacing=0)
     bar_space = alt.vconcat(empty_lines, bar_space).properties(spacing=0)
 
-    combined_chart = alt.hconcat(upper_chart, bar_space).properties(spacing=60).configure_legend(
-        labelFontSize=14,  
-        titleFontSize=14   
-    )
+    combined_chart = alt.hconcat(upper_chart, bar_space).properties(spacing=60).configure_legend(labelFontSize=14, titleFontSize=14)
     
     combined_chart["padding"] = {
         "top": 0,
@@ -587,11 +547,10 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     if (knee_point > depth_threshold) and (not beta):
         add_text = True
 
-    #add some text somewhere if kmer was run?
-    #add some text to beta visualization
     tabbed_context = {
         "vega_json": vega_json,
-        "beta_metric": (str(metric)),
+        "beta_metric": str(metric),
+        "algorithm": str(algorithm),
         "knee_point": (knee_point),
         "beta": beta,
         "percent_samples_100": json.dumps(float(percent_samples_100)),
@@ -607,7 +566,7 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         "max_read_percentile": json.dumps(int(max_read_percentile))
     }
     
-    templates = os.path.join(TEMPLATES, 'index.html') #adjust index file to have an if block for beta/alpha
+    templates = os.path.join(TEMPLATES, 'index.html')
 
     copytree(
         src=TEMPLATES,
@@ -633,17 +592,6 @@ def _rf_knee_locator(artifacts_list: pd.DataFrame, sample_list: list[str], steps
         df_list.append(sample_df)
 
         knee_points[i] = knee_point_locator(max_range, array_sample, algorithm, "alpha")
-        """if(algorithm == 'kneedle'):
-            #using KneeLocator to find the knee point
-            kneedle = KneeLocator(max_range, array_sample, curve="concave", direction="increasing", S=3)
-            knee_points[i] = kneedle.knee
-        else:
-            #using the gradient method
-            first_derivative = np.gradient(array_sample, max_range)
-            second_derivative = np.gradient(first_derivative, max_range)
-            max_index = np.argmax(second_derivative)
-            knee_points[i] = max_range[max_index]
-        print(knee_points[i])"""
 
     combined_df = pd.concat(df_list, ignore_index=True)
     
@@ -658,7 +606,7 @@ def _rf_knee_locator(artifacts_list: pd.DataFrame, sample_list: list[str], steps
 
 def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_samples: float, reads_per_sample: list[int], sorted_depths: list[int],
                          metric: str, max_reads: int, depth_threshold: int, knee_point: int, kmer_run: bool, combined_df: pd.DataFrame,
-                         max_read_percentile: int)-> None: 
+                         max_read_percentile: int, algorithm: str)-> None: 
     
     combined_df['sample'] = sample_names
     sorted_depths = pd.Series(sorted_depths)
@@ -725,10 +673,7 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
         x=alt.X('depth:Q', title=title_x),
         y=alt.Y('observed_features:Q', title=title_y),
         color=alt.Color('sample:N', legend=None).scale(scheme='category10')
-    ).add_params(
-        zoom, param_checkbox
-    ).properties(
-        title='Rarefaction Curves')
+    ).add_params(zoom, param_checkbox).properties(title='Rarefaction Curves')
 
     shaded_area = alt.Chart(pd.DataFrame({
         'x_min': [0],
@@ -763,10 +708,7 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
         width=450, 
         height=350)
     
-    final_with_line = alt.layer(final_chart, vertical_line).resolve_scale( 
-        x='shared',
-        y='shared'
-    )
+    final_with_line = alt.layer(final_chart, vertical_line).resolve_scale(x='shared', y='shared')
 
     text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     upper_chart = alt.vconcat(final_with_line, text_lines).properties(spacing=0)
@@ -805,14 +747,9 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
         height=350
     )
 
-    barplot_combined = alt.layer(background, barplot).resolve_scale(
-        x='shared',
-        y='shared'
-    )
+    barplot_combined = alt.layer(background, barplot).resolve_scale(x='shared', y='shared')
     
-    text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
     barplot_combined = alt.vconcat(barplot_combined, text_lines).properties(spacing=0)
-    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95, dy=-5).encode(text='text:N').properties(width=100, height=50)
     barplot_combined = alt.vconcat(empty_lines, barplot_combined).properties(spacing=0)
 
     combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60).configure_legend(
@@ -853,7 +790,8 @@ def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_sampl
         "graph_name": graph_name,
         "max_read_percentile": json.dumps(int(max_read_percentile)),
         "beta": False,
-        "beta_metric": metric
+        "beta_metric": metric,
+        "algorithm": str(algorithm)
     }
     
     templates = os.path.join(TEMPLATES, 'index.html')
