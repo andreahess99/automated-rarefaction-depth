@@ -62,7 +62,6 @@ plugin.pipelines.register_function(
             'sequence': FeatureData[Sequence]},
     outputs={'visualization': Visualization},
     parameters={'percent_samples': Float % Range(0, 1),
-                'meta_data': Metadata, #added for testing working with metadata
                 'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
                 'steps': Int % Range(10, 100), 
@@ -80,7 +79,6 @@ plugin.pipelines.register_function(
     parameter_descriptions={'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
         'iterations': 'The number of times each sample gets rarefied at each depth, a positive number below 100.',
         'table_size': 'The number of samples to keep in the feature table, a positive number.',
-        'meta_data': 'Metadata to be used in the analysis.', #added for testing working with metadata
         'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',
         'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.',
         'seed': 'The seed used for the random sampling of samples in case the table is larger than the table_size parameter. A positive integer.',

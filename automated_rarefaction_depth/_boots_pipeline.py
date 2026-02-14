@@ -74,7 +74,7 @@ warnings.simplefilter(action='ignore', category=RuntimeWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
  
 
-def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], metric=_pipe_defaults['metric'],
+def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], metric=_pipe_defaults['metric'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
                    seed = _pipe_defaults['seed'], kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
                    min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm']):
@@ -87,14 +87,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     viz_combined_action = ctx.get_action('rarefaction-depth', '_combined_viz')
 
     table_df = table.view(pd.DataFrame)
-
-    # if grouping with a metadata category is wanted, use this code to do it
-    """meta = meta_data.to_dataframe()
-    sample_ids = meta[meta['extract-group-no'] == 'H'].index.tolist()
-    print("Samples with H:", sample_ids)
-    #filtering table according to metadata --> test different things
-    table_df = table_df.loc[sample_ids]"""
-
     
     #run seqs_to_kmers if sequence is provided
     kmer_run = False
@@ -446,7 +438,9 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
 
 
     #make 2 plots a 1 line plot, 1 barplot
-    zoom = alt.selection_interval(bind='scales')
+    line_chart_df = line_chart_df.dropna(subset=['observed_features'])
+
+    """zoom = alt.selection_interval(bind='scales')
     param_checkbox = alt.param(
         bind=alt.binding_checkbox(name='Show read depth specified by slider as a line on the plot: ')) 
     s = alt.param(
@@ -492,19 +486,19 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         ).properties(
             title='Rarefaction Curves', width=450, height=350)
     
-    rf_line_plot = alt.layer(final_chart, moving_line).resolve_scale(x='shared', y='shared')
+    rf_line_plot = alt.layer(final_chart, moving_line).resolve_scale(x='shared', y='shared')"""
 
     #barplot
     if beta:
         #df_bars = pd.DataFrame({'depth': max_range, 'num_samples_left': num_samples_left})
         df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
-        barplot = alt.Chart(df_bars).mark_bar(color='steelblue').encode(
+        """barplot = alt.Chart(df_bars).mark_bar(color='steelblue').encode(
                 x=alt.X('depth:Q', title='Read Depth', scale=alt.Scale(domainMin=0)),
                 y=alt.Y('num_samples_left:Q', title='Number of Samples Left')
-            ).add_params(zoom).properties(width=450, height=350, title='Samples Remaining at each Rarefaction Depth')
+            ).add_params(zoom).properties(width=450, height=350, title='Samples Remaining at each Rarefaction Depth')"""
 
     else:
-        predicate = alt.datum.reads_per_sample >= s 
+        """predicate = alt.datum.reads_per_sample >= s
         barplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
             x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title=barplot_title),
             y=alt.Y('count()', title='# Samples'),
@@ -535,14 +529,54 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         "left": 0,
         "right": 0,
         "bottom":  -49  
-    }
+    }"""
    
-    vega_json = combined_chart.to_json() 
+    #original way to get the vega json for the altair plot
+    #vega_json = combined_chart.to_json() 
 
     TEMPLATES = os.path.join(
         os.path.dirname(__file__),
         "assets"
     )
+
+    #trying to dynamically populate my vega plot
+    if beta:
+        with open(os.path.join(TEMPLATES, "beta_complete_viz.json")) as f:
+            spec = json.load(f)
+
+        for d in spec["data"]:
+            if d["name"] == "left_table":
+                d["values"] = line_chart_df.to_dict(orient='records')
+        
+        for d in spec["data"]:
+            if d["name"] == "right_table":
+                d["values"] = df_bars.to_dict(orient='records')
+        
+        for signal in spec.get("signals", []):
+            if signal["name"] == "inject_1":
+                signal["value"] = int(knee_point)
+
+    else:
+        with open(os.path.join(TEMPLATES, "alpha_complete_viz.json")) as f:
+            spec = json.load(f)
+
+        for d in spec["data"]:
+            if d["name"] == "left_table":
+                d["values"] = line_chart_df.to_dict(orient='records')
+        
+        for d in spec["data"]:
+            if d["name"] == "right_raw":
+                d["values"] = reads_per_sample_df.to_dict(orient='records')
+        
+        for signal in spec.get("signals", []):
+            if signal["name"] == "inject_1":
+                signal["value"] = int(depth_threshold)
+            if signal["name"] == "inject_2":
+                signal["value"] = int(knee_point)
+
+    
+    vega_json = json.dumps(spec)
+    
 
     if (knee_point > depth_threshold) and (not beta):
         add_text = True

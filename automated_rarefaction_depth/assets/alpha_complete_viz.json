@@ -1,0 +1,195 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "width": 520,
+  "height": 350,
+  "padding": 5,
+  "signals": [
+    {"name": "inject_1", "value": 0},
+    {"name": "inject_2", "value": 0}
+  ],
+  "data": [
+    {"name": "left_table", "values": []},
+    {"name": "right_raw", "values": []},
+    {
+      "name": "extent",
+      "source": "right_raw",
+      "transform": [
+        {"type": "extent", "field": "reads_per_sample", "signal": "binExtent"}
+      ]
+    },
+    {
+      "name": "right_table",
+      "source": "right_raw",
+      "transform": [
+        {
+          "type": "bin",
+          "field": "reads_per_sample",
+          "extent": {"signal": "binExtent"},
+          "as": ["bin_start", "bin_end"],
+          "step": 200
+        },
+        {
+          "type": "aggregate",
+          "groupby": ["bin_start", "bin_end"],
+          "ops": ["count"],
+          "as": ["count"]
+        }
+      ]
+    }
+  ],
+  "marks": [
+    {
+      "type": "group",
+      "encode": {
+        "enter": {
+          "x": {"value": 0},
+          "y": {"value": 0},
+          "width": {"value": 450},
+          "height": {"value": 350}
+        }
+      },
+      "scales": [
+        {
+          "name": "x",
+          "type": "linear",
+          "domain": {"data": "left_table", "field": "depth"},
+          "range": "width",
+          "nice": true
+        },
+        {
+          "name": "y",
+          "type": "linear",
+          "domain": {"data": "left_table", "field": "observed_features"},
+          "range": "height",
+          "zero": true,
+          "nice": true
+        },
+        {
+          "name": "color",
+          "type": "ordinal",
+          "domain": {"data": "left_table", "field": "sample"},
+          "range": {"scheme": "category10"}
+        }
+      ],
+      "axes": [
+        {"orient": "bottom", "scale": "x", "title": "Read Depth"},
+        {"orient": "left", "scale": "y", "title": "# Observed Features"}
+      ],
+      "marks": [
+        {
+          "type": "rect",
+          "encode": {
+            "enter": {
+              "x": {"scale": "x", "value": 0},
+              "x2": {"scale": "x", "signal": "inject_1"},
+              "y": {"value": 0},
+              "y2": {"signal": "height"},
+              "fill": {"value": "#FFDAB9"},
+              "fillOpacity": {"value": 0.4}
+            }
+          }
+        },
+        {
+          "type": "group",
+          "from": {
+            "facet": {
+              "name": "series",
+              "data": "left_table",
+              "groupby": "sample"
+            }
+          },
+          "marks": [
+            {
+              "type": "line",
+              "from": {"data": "series"},
+              "encode": {
+                "enter": {
+                  "x": {"scale": "x", "field": "depth"},
+                  "y": {"scale": "y", "field": "observed_features"},
+                  "stroke": {"scale": "color", "field": "sample"},
+                  "strokeWidth": {"value": 2}
+                }
+              }
+            },
+            {
+              "type": "rule",
+              "encode": {
+                "enter": {
+                  "x": {"scale": "x", "signal": "inject_2"},
+                  "y": {"value": 0},
+                  "y2": {"signal": "height"},
+                  "stroke": {"value": "red"},
+                  "strokeWidth": {"value": 2}
+                }
+              }
+            },
+            {
+              "type": "symbol",
+              "from": {"data": "series"},
+              "encode": {
+                "enter": {
+                  "x": {"scale": "x", "field": "depth"},
+                  "y": {"scale": "y", "field": "observed_features"},
+                  "fill": {"scale": "color", "field": "sample"},
+                  "size": {"value": 30}
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "encode": {
+        "enter": {
+          "x": {"value": 600},
+          "y": {"value": 0},
+          "width": {"value": 450},
+          "height": {"value": 350}
+        }
+      },
+      "scales": [
+        {
+          "name": "x_right",
+          "type": "linear",
+          "domain": {"data": "right_table", "field": "bin_start"},
+          "range": "width",
+          "nice": true
+        },
+        {
+          "name": "y_right",
+          "type": "linear",
+          "domain": {"data": "right_table", "field": "count"},
+          "range": "height",
+          "zero": true,
+          "nice": true
+        }
+      ],
+      "axes": [
+        {"orient": "bottom", "scale": "x_right", "title": "Reads per Sample"},
+        {"orient": "left", "scale": "y_right", "title": "Number of Samples"}
+      ],
+      "marks": [
+        {
+          "type": "rect",
+          "from": {"data": "right_table"},
+          "encode": {
+            "enter": {
+              "x": {"scale": "x_right", "field": "bin_start", "offset": 2},
+              "x2": {"scale": "x_right", "field": "bin_end", "offset": -2},
+              "y": {"scale": "y_right", "field": "count"},
+              "y2": {"scale": "y_right", "value": 0}
+            },
+            "update": {
+              "fill": {"value": "steelblue"},
+              "tooltip": {"signal": "'Samples in bin: '+datum.count"}
+            },
+            "hover": {"fill": {"value": "red"}}
+          }
+        }
+      ]
+    }
+  ],
+  "config": {}
+}

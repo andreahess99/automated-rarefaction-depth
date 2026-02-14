@@ -1,0 +1,155 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "width": 540,
+  "height": 350,
+  "padding": 5,
+  "signals": [{"name": "inject_1", "value": 100}],
+  "data": [
+    {"name": "left_table", "values": []},
+    {"name": "right_table", "values": []}
+  ],
+  "marks": [
+    {
+      "type": "group",
+      "encode": {
+        "enter": {
+          "x": {"value": 0},
+          "y": {"value": 0},
+          "width": {"value": 450},
+          "height": {"value": 350}
+        }
+      },
+      "scales": [
+        {
+          "name": "x",
+          "type": "linear",
+          "domain": {"data": "left_table", "field": "depth"},
+          "range": "width",
+          "nice": true
+        },
+        {
+          "name": "y",
+          "type": "linear",
+          "domain": {"data": "left_table", "field": "observed_features"},
+          "range": "height",
+          "zero": true,
+          "nice": true
+        },
+        {
+          "name": "color",
+          "type": "ordinal",
+          "domain": {"data": "left_table", "field": "sample"},
+          "range": {"scheme": "category10"}
+        }
+      ],
+      "axes": [
+        {"orient": "bottom", "scale": "x", "title": "Read Depth"},
+        {"orient": "left", "scale": "y", "title": "# Observed Features"}
+      ],
+      "marks": [
+        {
+          "type": "group",
+          "from": {
+            "facet": {
+              "name": "series",
+              "data": "left_table",
+              "groupby": "sample"
+            }
+          },
+          "marks": [
+            {
+              "type": "line",
+              "from": {"data": "series"},
+              "encode": {
+                "enter": {
+                  "x": {"scale": "x", "field": "depth"},
+                  "y": {"scale": "y", "field": "observed_features"},
+                  "stroke": {"scale": "color", "field": "sample"},
+                  "strokeWidth": {"value": 2}
+                }
+              }
+            },
+            {
+              "type": "rule",
+              "encode": {
+                "enter": {
+                  "x": {"scale": "x", "signal": "inject_1"},
+                  "y": {"value": 0},
+                  "y2": {"signal": "height"},
+                  "stroke": {"value": "red"},
+                  "strokeWidth": {"value": 2}
+                }
+              }
+            },
+            {
+              "type": "symbol",
+              "from": {"data": "series"},
+              "encode": {
+                "enter": {
+                  "x": {"scale": "x", "field": "depth"},
+                  "y": {"scale": "y", "field": "observed_features"},
+                  "fill": {"scale": "color", "field": "sample"},
+                  "size": {"value": 30}
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "encode": {
+        "enter": {
+          "x": {"value": 570},
+          "y": {"value": 0},
+          "width": {"value": 450},
+          "height": {"value": 350}
+        }
+      },
+      "scales": [
+        {
+          "name": "x_right",
+          "type": "band",
+          "domain": {"data": "right_table", "field": "depth"},
+          "range": "width",
+          "padding": 0.05,
+          "round": true
+        },
+        {
+          "name": "y_right",
+          "type": "linear",
+          "domain": {"data": "right_table", "field": "num_samples_left"},
+          "range": "height",
+          "nice": true,
+          "zero": true
+        }
+      ],
+      "axes": [
+        {"orient": "bottom", "scale": "x_right", "title": "Read Depth"},
+        {
+          "orient": "left",
+          "scale": "y_right",
+          "title": "Number of Samples left"
+        }
+      ],
+      "marks": [
+        {
+          "type": "rect",
+          "from": {"data": "right_table"},
+          "encode": {
+            "enter": {
+              "x": {"scale": "x_right", "field": "depth"},
+              "width": {"scale": "x_right", "band": 0.5},
+              "y": {"scale": "y_right", "field": "num_samples_left"},
+              "y2": {"scale": "y_right", "value": 0}
+            },
+            "update": {"fill": {"value": "steelblue"}},
+            "hover": {"fill": {"value": "red"}}
+          }
+        }
+      ]
+    }
+  ],
+  "config": {}
+}
