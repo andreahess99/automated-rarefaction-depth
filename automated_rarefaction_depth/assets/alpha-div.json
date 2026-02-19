@@ -1,0 +1,167 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "width": 700,
+  "height": 400,
+  "padding": {"top": 35, "left": 5, "right": 5, "bottom": 5},
+  "signals": [
+    {
+      "name": "groupField",
+      "value": "sample",
+      "bind": {"input": "select", "options": [], "name": "Group by: "}
+    },
+    {"name": "knee_point", "value": 200}
+  ],
+  "data": [
+    {"name": "raw", "values": []},
+    {
+      "name": "raw_with_group",
+      "source": "raw",
+      "transform": [
+        {"type": "formula", "as": "group", "expr": "datum[groupField]"}
+      ]
+    },
+    {
+      "name": "stats",
+      "source": "raw_with_group",
+      "transform": [
+        {
+          "type": "aggregate",
+          "groupby": ["group", "read_depth"],
+          "ops": ["median", "q1", "q3", "min", "max"],
+          "fields": [
+            "observed",
+            "observed",
+            "observed",
+            "observed",
+            "observed"
+          ],
+          "as": ["median", "q1", "q3", "min", "max"]
+        }
+      ]
+    },
+    {
+      "name": "legend_groups",
+      "source": "stats",
+      "transform": [
+        {"type": "aggregate", "groupby": ["group"]},
+        {"type": "window", "ops": ["row_number"], "as": ["index"]}
+      ]
+    }
+  ],
+  "scales": [
+    {
+      "name": "x",
+      "type": "linear",
+      "domain": {"data": "raw", "field": "read_depth"},
+      "range": "width"
+    },
+    {
+      "name": "y",
+      "type": "linear",
+      "domain": {"data": "raw", "field": "observed"},
+      "nice": true,
+      "range": "height"
+    },
+    {
+      "name": "color",
+      "type": "ordinal",
+      "domain": {"data": "raw_with_group", "field": "group"},
+      "range": {"scheme": "category10"}
+    }
+  ],
+  "axes": [
+    {"scale": "x", "orient": "bottom", "title": "Sequencing Depth", "titleFontSize": 14, "labelFontSize": 12},
+    {"scale": "y", "orient": "left", "title": "Observed Features", "titleFontSize": 14, "labelFontSize": 12}
+  ],
+  "marks": [
+    {
+      "type": "rect",
+      "from": {"data": "stats"},
+      "encode": {
+        "enter": {
+          "x": {"scale": "x", "field": "read_depth", "offset": -6},
+          "x2": {"scale": "x", "field": "read_depth", "offset": 6},
+          "y": {"scale": "y", "field": "q3"},
+          "y2": {"scale": "y", "field": "q1"},
+          "stroke": {"scale": "color", "field": "group"},
+          "strokeWidth": {"value": 1},
+          "fill": {"value": null}
+        }
+      }
+    },
+    {
+      "type": "rule",
+      "from": {"data": "stats"},
+      "encode": {
+        "enter": {
+          "x": {"scale": "x", "field": "read_depth"},
+          "y": {"scale": "y", "field": "min"},
+          "y2": {"scale": "y", "field": "max"},
+          "stroke": {"scale": "color", "field": "group"}
+        }
+      }
+    },
+    {
+      "type": "group",
+      "from": {
+        "facet": {"name": "faceted", "data": "stats", "groupby": "group"}
+      },
+      "marks": [
+        {
+          "type": "line",
+          "from": {"data": "faceted"},
+          "encode": {
+            "enter": {
+              "x": {"scale": "x", "field": "read_depth"},
+              "y": {"scale": "y", "field": "median"},
+              "stroke": {"scale": "color", "field": "group"},
+              "strokeWidth": {"value": 1}
+            }
+          }
+        },
+        {
+          "type": "symbol",
+          "from": {"data": "legend_groups"},
+          "encode": {
+            "enter": {
+              "x": {"value": 15},
+              "y": {"signal": "height + 30 + 20*(datum.index-1)"},
+              "shape": {"value": "circle"},
+              "stroke": {"scale": "color", "field": "group"},
+              "fill": {"value": null},
+              "strokeWidth": {"value": 2},
+              "size": {"value": 80}
+            }
+          }
+        },
+        {
+          "type": "text",
+          "from": {"data": "legend_groups"},
+          "encode": {
+            "enter": {
+              "x": {"value": 35},
+              "y": {"signal": "height + 30 + 20*(datum.index-1)"},
+              "text": {"field": "group"},
+              "align": {"value": "left"},
+              "baseline": {"value": "middle"},
+              "fill": {"value": "#000"}
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "rule",
+      "encode": {
+        "enter": {
+          "y": {"value": 0},
+          "y2": {"signal": "height"},
+          "stroke": {"value": "red"},
+          "strokeWidth": {"value": 2}
+        },
+        "update": {"x": {"scale": "x", "signal": "knee_point"}}
+      }
+    }
+  ],
+  "config": {}
+}

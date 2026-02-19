@@ -18,6 +18,7 @@ import altair as alt
 from shutil import copytree
 import warnings
 from skbio import DistanceMatrix
+import time
 import matplotlib.pyplot as plt
 
 
@@ -74,7 +75,7 @@ warnings.simplefilter(action='ignore', category=RuntimeWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
  
 
-def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], metric=_pipe_defaults['metric'],
+def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], metric=_pipe_defaults['metric'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
                    seed = _pipe_defaults['seed'], kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
                    min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm']):
@@ -85,8 +86,23 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     #viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
     #beta_viz_action = ctx.get_action('rarefaction-depth', '_beta_viz')
     viz_combined_action = ctx.get_action('rarefaction-depth', '_combined_viz')
+    #for testing
+    alpha_collection_action = ctx.get_action("boots", "alpha_collection")
 
     table_df = table.view(pd.DataFrame)
+
+    meta = meta_data.to_dataframe()
+    meta.index.name = "sample"
+    #metadata_columns = json.dumps(["sample"] + meta.columns.tolist())
+    metadata_columns = ["sample"] + meta.columns.tolist()
+    print(metadata_columns)
+    print(type(metadata_columns))
+    
+    #print(meta.head())
+    """sample_ids = meta[meta['extract-group-no'] == 'H'].index.tolist()
+    print("Samples with H:", sample_ids)
+    #filtering table according to metadata --> test different things
+    table_df = table_df.loc[sample_ids]"""
     
     #run seqs_to_kmers if sequence is provided
     kmer_run = False
@@ -176,17 +192,65 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
     
     else:
         #if alpha metric was chosen
+        #testing 
+        dfs = []
+        combined_depth_df = pd.DataFrame()
+
         for i in range(steps):
             print(f"step {i+1}: {max_range[i]}")
-            result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
-            artifacts_list.append(result)
+            """result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
+            artifacts_list.append(result)"""
 
-        pd_new = pd.DataFrame(
+            #for testing
+            #function to use if we want to get the data for each iteration and sample instead of just the average
+            #and then combine it into a dataframe to use for the visualization and knee point calculation
+            sample_data, = alpha_collection_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False)
+            for key, artifact in sample_data.items():
+                series = artifact.view(pd.Series)
+                df = series.reset_index()
+                df.columns = ['sample', 'observed']
+                df['iteration'] = key
+                df['read_depth'] = int(max_range[i])  
+                dfs.append(df)
+                
+            combined = pd.concat(dfs, ignore_index=True)
+            #potentially do it after the loop so you only merge once 
+            meta.fillna(0, inplace=True)
+            combined = combined.merge(meta, left_on="sample", right_index=True, how="left")
+            print(combined.columns)
+            print(combined.head())
+
+            # Calculate average after collecting all iterations for this depth
+            #making the mean_df which I would need for the knee point calculation
+            mean_df = (combined.groupby(['sample', 'read_depth'], as_index=False).agg(mean_observed=('observed', 'mean')))
+            #print(mean_df)
+        
+        print(combined.head())
+        out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
+        os.makedirs(out_dir, exist_ok=True)
+        combined.to_json(
+            os.path.join(out_dir, f"iter_data.json"), orient="records", indent=2)
+        
+        #calculatin knee point here as data formats are a bit different
+        print(f"max range for knee point calculation: {max_range}")
+        knee_points = [None] * len(sample_list)
+        for i, sample in enumerate(sample_list):
+            array_sample = mean_df[mean_df['sample'] == sample]['mean_observed'].values
+            max_range_for_sample = max_range[:len(array_sample)]
+            knee_points[i] = knee_point_locator(max_range_for_sample, array_sample, algorithm, "alpha")
+        
+        knee_points_filtered = [point for point in knee_points if point is not None] 
+        knee_point = round(np.mean(knee_points_filtered))
+        print("calculated rarefaction depth:")
+        print(knee_point)
+        combined_df = mean_df.pivot(index='sample', columns='read_depth', values='mean_observed').reset_index()
+
+        """pd_new = pd.DataFrame(
             np.nan,  
             index=table_df.index, 
             columns=[f"Step_{j+1}" for j in range(steps)]  
         )
-    
+
         dfs = []
         for i, artifact in enumerate(artifacts_list):
             df = artifact.view(pd.Series).to_frame(name='observed_features')
@@ -198,20 +262,31 @@ def pipeline_boots(ctx, table, sequence=None, iterations=_pipe_defaults['iterati
                     pd_new.iloc[j, i] = np.nan
 
         combined_df, knee_point = _rf_knee_locator(artifacts_list=pd_new, sample_list=sample_list,
-                                                steps=steps, algorithm=algorithm, max_reads=max_reads)
+                                                steps=steps, algorithm=algorithm, max_reads=max_reads)"""
         
         sample_names = combined_df.iloc[:, -1].tolist()
         combined_df = combined_df.drop(combined_df.columns[-1], axis=1)
 
         combined_df.index = combined_df.index.astype(str)
-        combined_artifact = qiime2.Artifact.import_data("FeatureTable[Frequency]", combined_df)
+        #combined_artifact = qiime2.Artifact.import_data("FeatureTable[Frequency]", combined_df)
 
         percent_samples_100 = round(percent_samples * 100, 2)
 
         #visualization, = viz_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
         #                sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm)
-        visualization, = viz_combined_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
-                        sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm)
+        #actual visualization
+        #visualization, = viz_combined_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
+        #                sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm)
+        #added for testing
+ 
+        combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
+        combined = combined.set_index('id')
+
+        print(combined.index.names)         
+        combined = qiime2.Metadata(combined)
+        visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass,
+                        sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm,
+                        combined=combined, metadata_columns=metadata_columns) 
 
     return visualization
 
@@ -349,8 +424,9 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
 
 # combined visualization function for alpha and beta metrics
 # to do: add some text somewhere if kmer was run?
-def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, calc_array: list[float] = None, algorithm: str = "kneedle", num_samples_left: list[int] = None, sample_names: list[str] = None,
-                  percent_samples_100: float = 0, reads_per_sample: list[int] = None, sorted_depths: list[int] = None, max_reads: int = 1, depth_threshold: int = 1, knee_point: int = 0, max_read_percentile: int = 1, combined_df: pd.DataFrame = None)->None:
+def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, calc_array: list[float] = None, algorithm: str = "kneedle", num_samples_left: list[int] = None, 
+                  percent_samples_100: float = 0, reads_per_sample: list[int] = None, sorted_depths: list[int] = None, max_reads: int = 1, depth_threshold: int = 1, knee_point: int = 0, max_read_percentile: int = 1,# combined_df: pd.DataFrame = None, sample_names: list[str] = None,
+                  metadata_columns: list[str] = None, combined: qiime2.Metadata = None)->None: #added metadata_columns and combined for the alpha visualization with metadata  
     
     #default values for the tabbed_context
     add_text = False
@@ -367,6 +443,9 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     alt.themes.register('altair_theme', altair_theme)
     alt.themes.enable('altair_theme')
     alt.data_transformers.disable_max_rows()
+
+    #testing
+    print("combined df for visualization:", combined)
 
     # beta metric specific code
     if metric in ['braycurtis', 'jaccard']:
@@ -390,8 +469,10 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     #alpha metric specific code
     else:
         line_plot_title = 'Rarefaction Curves'
-        combined_df['sample'] = sample_names
-        line_chart_df = combined_df
+        #combined_df['sample'] = sample_names
+        #line_chart_df = combined_df
+        #added so I won't get errors for now
+        line_chart_df = combined.to_dataframe().reset_index()
         sorted_depths = pd.Series(sorted_depths)
         reads_per_sample = pd.DataFrame(reads_per_sample)
 
@@ -438,7 +519,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
 
 
     #make 2 plots a 1 line plot, 1 barplot
-    line_chart_df = line_chart_df.dropna(subset=['observed_features'])
+    #commented out for testing
+    #line_chart_df = line_chart_df.dropna(subset=['observed_features'])
 
     """zoom = alt.selection_interval(bind='scales')
     param_checkbox = alt.param(
@@ -557,7 +639,7 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 signal["value"] = int(knee_point)
 
     else:
-        with open(os.path.join(TEMPLATES, "alpha_complete_viz.json")) as f:
+        """with open(os.path.join(TEMPLATES, "alpha_complete_viz.json")) as f:
             spec = json.load(f)
 
         for d in spec["data"]:
@@ -572,10 +654,27 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
             if signal["name"] == "inject_1":
                 signal["value"] = int(depth_threshold)
             if signal["name"] == "inject_2":
-                signal["value"] = int(knee_point)
+                signal["value"] = int(knee_point)"""
+        
+        #trying to make it look like the alpha diversity plot
+        with open(os.path.join(TEMPLATES, "alpha-div.json")) as f:
+            spec = json.load(f)
+
+        for d in spec["data"]:
+            if d["name"] == "raw":
+                combined = combined.to_dataframe().reset_index()
+                d["values"] = combined.to_dict(orient='records')
+
+        for signal in spec["signals"]:
+            if signal["name"] == "groupField":
+                signal["bind"]["options"] = metadata_columns
+            if signal["name"] == "knee_point":
+                signal["value"] = int(depth_threshold)
 
     
     vega_json = json.dumps(spec)
+    with open(os.path.join(TEMPLATES, "alpha-div-populated.json"), 'w') as f:
+        json.dump(spec, f, indent=2)
     
 
     if (knee_point > depth_threshold) and (not beta):

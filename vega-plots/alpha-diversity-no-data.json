@@ -1,0 +1,103 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "width": 700,
+  "height": 400,
+  "padding": 5,
+  "data": [
+    {"name": "raw", "values": []},
+    {
+      "name": "stats",
+      "source": "raw",
+      "transform": [
+        {
+          "type": "aggregate",
+          "groupby": ["sample", "depth"],
+          "ops": ["median", "q1", "q3", "min", "max"],
+          "fields": [
+            "observed",
+            "observed",
+            "observed",
+            "observed",
+            "observed"
+          ],
+          "as": ["median", "q1", "q3", "min", "max"]
+        }
+      ]
+    }
+  ],
+  "scales": [
+    {
+      "name": "x",
+      "type": "linear",
+      "domain": {"data": "raw", "field": "depth"},
+      "range": "width"
+    },
+    {
+      "name": "y",
+      "type": "linear",
+      "domain": {"data": "raw", "field": "observed"},
+      "nice": true,
+      "range": "height"
+    },
+    {
+      "name": "color",
+      "type": "ordinal",
+      "domain": {"data": "raw", "field": "sample"},
+      "range": "category"
+    }
+  ],
+  "axes": [
+    {"scale": "x", "orient": "bottom", "title": "Sequencing Depth"},
+    {"scale": "y", "orient": "left", "title": "Observed Features"}
+  ],
+  "marks": [
+    {
+      "type": "rect",
+      "from": {"data": "stats"},
+      "encode": {
+        "enter": {
+          "x": {"scale": "x", "field": "depth", "offset": -6},
+          "x2": {"scale": "x", "field": "depth", "offset": 6},
+          "y": {"scale": "y", "field": "q3"},
+          "y2": {"scale": "y", "field": "q1"},
+          "stroke": {"scale": "color", "field": "sample"},
+          "strokeWidth": {"value": 1},
+          "fill": {"value": null}
+        }
+      }
+    },
+    {
+      "type": "rule",
+      "from": {"data": "stats"},
+      "encode": {
+        "enter": {
+          "x": {"scale": "x", "field": "depth"},
+          "y": {"scale": "y", "field": "min"},
+          "y2": {"scale": "y", "field": "max"},
+          "stroke": {"scale": "color", "field": "sample"}
+        }
+      }
+    },
+    {
+      "type": "group",
+      "from": {
+        "facet": {"name": "faceted", "data": "stats", "groupby": "sample"}
+      },
+      "marks": [
+        {
+          "type": "line",
+          "from": {"data": "faceted"},
+          "encode": {
+            "enter": {
+              "x": {"scale": "x", "field": "depth"},
+              "y": {"scale": "y", "field": "median"},
+              "stroke": {"scale": "color", "field": "sample"},
+              "strokeWidth": {"value": 1}
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "config": {}
+}

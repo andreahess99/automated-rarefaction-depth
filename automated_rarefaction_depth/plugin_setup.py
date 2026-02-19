@@ -62,6 +62,7 @@ plugin.pipelines.register_function(
             'sequence': FeatureData[Sequence]},
     outputs={'visualization': Visualization},
     parameters={'percent_samples': Float % Range(0, 1),
+                'meta_data': Metadata, #added for testing working with metadata for the vega plot
                 'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
                 'steps': Int % Range(10, 100), 
@@ -177,8 +178,11 @@ plugin.visualizers.register_function(
 #combined visualizer
 plugin.visualizers.register_function(
     function=_combined_viz,
-    inputs={'combined_df': FeatureTable[Frequency]},
-    parameters={'sorted_depths': List[Int],
+    inputs={#'combined_df': FeatureTable[Frequency],
+            #added for the alpha visualization with metadata -> also delete descriptions after
+            },
+    parameters={'combined': Metadata,
+                'sorted_depths': List[Int],
                 'percent_samples_100': Float,
                 'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard']),
                 'max_reads': Int % Range(1, None),
@@ -187,17 +191,19 @@ plugin.visualizers.register_function(
                 'reads_per_sample': List[Int],
                 'kmer_run': Bool,
                 'knee_point': Int,
-                'sample_names': List[Str], 
+                #'sample_names': List[Str], 
                 'max_range': List[Float],
                 'algorithm': Str % Choices(['kneedle', 'gradient']),
                 'calc_array': List[Float],
-                'num_samples_left': List[Int]
+                'num_samples_left': List[Int],
+                #added parameters for the alpha visualization with metadata
+                'metadata_columns': List[Str]
                 },
     input_descriptions={
-        'combined_df': 'A table containing the number of distinct features that were found in a sample at a specific depth.'
+        #'combined_df': 'A table containing the number of distinct features that were found in a sample at a specific depth.'
     },
     parameter_descriptions={
-        'sample_names': 'A list of all sample names.',
+        #'sample_names': 'A list of all sample names.',
         'sorted_depths': 'A list of sorted depths as integers.',
         'max_read_percentile': 'The maximum read depth percentile used for linearly spacing the evaluated depths.',
         'percent_samples_100': 'The minimal percentage of samples you want to keep, between 0 and 100.',
@@ -210,7 +216,8 @@ plugin.visualizers.register_function(
         'algorithm': "The algorithm which was chosen for the knee point calculation, kneedle or gradient",
         'max_range': 'The different read depths at which the distance matrix was calculated.',
         'calc_array': 'The array of the calculated points.',
-        'num_samples_left': "This array contains how many samples are considered at the considered read depths."
+        'num_samples_left': "This array contains how many samples are considered at the considered read depths.",
+        'metadata_columns': "The metadata columns that are present in the combined feature table."
     },
     name='Automated Rarefaction Depth',
     description=("Makes the graphs and produces the visualization for both alpha and beta diversity metrics."),
