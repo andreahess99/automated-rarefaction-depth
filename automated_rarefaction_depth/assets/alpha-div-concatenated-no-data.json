@@ -1,0 +1,278 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "width": 900,
+  "height": 400,
+  "signals": [
+    {
+      "name": "groupField",
+      "value": "sample",
+      "bind": {"input": "select", "options": [], "name": "Group by: "}
+    },
+    {"name": "knee_point", "value": 200}
+  ],
+  "data": [
+    {"name": "raw", "values": []},
+    {
+      "name": "raw_with_group",
+      "source": "raw",
+      "transform": [
+        {"type": "formula", "as": "group", "expr": "datum[groupField]"}
+      ]
+    },
+    {
+      "name": "stats",
+      "source": "raw_with_group",
+      "transform": [
+        {
+          "type": "aggregate",
+          "groupby": ["group", "read_depth"],
+          "ops": ["median", "q1", "q3", "min", "max"],
+          "fields": [
+            "observed",
+            "observed",
+            "observed",
+            "observed",
+            "observed"
+          ],
+          "as": ["median", "q1", "q3", "min", "max"]
+        }
+      ]
+    },
+    {
+      "name": "legend_groups",
+      "source": "stats",
+      "transform": [
+        {"type": "aggregate", "groupby": ["group"]},
+        {"type": "window", "ops": ["row_number"], "as": ["index"]}
+      ]
+    },
+    {"name": "samples", "values": []},
+    {
+      "name": "samples_with_group",
+      "source": "samples",
+      "transform": [
+        {"type": "formula", "as": "group", "expr": "datum[groupField]"}
+      ]
+    },
+    {
+      "name": "counts",
+      "source": "samples_with_group",
+      "transform": [
+        {
+          "type": "aggregate",
+          "groupby": ["group", "reads"],
+          "ops": ["count"],
+          "as": ["count"]
+        }
+      ]
+    },
+    {
+      "name": "sorted",
+      "source": "counts",
+      "transform": [
+        {
+          "type": "collect",
+          "sort": {
+            "field": ["group", "reads"],
+            "order": ["ascending", "descending"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cumulative",
+      "source": "sorted",
+      "transform": [
+        {
+          "type": "window",
+          "groupby": ["group"],
+          "ops": ["sum"],
+          "fields": ["count"],
+          "as": ["samples_geq_reads"]
+        }
+      ]
+    }
+  ],
+  "scales": [
+    {
+      "name": "color",
+      "type": "ordinal",
+      "domain": {"data": "raw_with_group", "field": "group"},
+      "range": {"scheme": "category10"}
+    }
+  ],
+  "marks": [
+    {
+      "type": "group",
+      "name": "upper_plot",
+      "encode": {
+        "enter": {
+          "x": {"value": 0},
+          "y": {"value": 50},
+          "width": {"value": 900},
+          "height": {"value": 400}
+        }
+      },
+      "scales": [
+        {
+          "name": "x1",
+          "type": "linear",
+          "domain": {"data": "raw", "field": "read_depth"},
+          "range": "width"
+        },
+        {
+          "name": "y1",
+          "type": "linear",
+          "domain": {"data": "raw", "field": "observed"},
+          "range": "height"
+        }
+      ],
+      "axes": [
+        {"scale": "x1", "orient": "bottom", "title": "Sequencing Depth","titleFontSize": 12,"titleFontWeight": "normal","labelFontSize": 10},
+        {"scale": "y1", "orient": "left", "title": "Observed Features","titleFontSize": 12,"titleFontWeight": "normal","labelFontSize": 10}
+      ],
+      "marks": [
+        {
+          "type": "rect",
+          "from": {"data": "stats"},
+          "encode": {
+            "enter": {
+              "x": {"scale": "x1", "field": "read_depth", "offset": -6},
+              "x2": {"scale": "x1", "field": "read_depth", "offset": 6},
+              "y": {"scale": "y1", "field": "q3"},
+              "y2": {"scale": "y1", "field": "q1"},
+              "stroke": {"scale": "color", "field": "group"},
+              "fill": {"value": null}
+            }
+          }
+        },
+        {
+          "type": "rule",
+          "from": {"data": "stats"},
+          "encode": {
+            "enter": {
+              "x": {"scale": "x1", "field": "read_depth"},
+              "y": {"scale": "y1", "field": "min"},
+              "y2": {"scale": "y1", "field": "max"},
+              "stroke": {"scale": "color", "field": "group"}
+            }
+          }
+        },
+        {
+          "type": "group",
+          "from": {
+            "facet": {"name": "faceted", "data": "stats", "groupby": "group"}
+          },
+          "marks": [
+            {
+              "type": "line",
+              "from": {"data": "faceted"},
+              "encode": {
+                "enter": {
+                  "x": {"scale": "x1", "field": "read_depth"},
+                  "y": {"scale": "y1", "field": "median"},
+                  "stroke": {"scale": "color", "field": "group"},
+                  "strokeWidth": {"value": 1}
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "rule",
+          "encode": {
+            "enter": {
+              "y": {"value": 0},
+              "y2": {"signal": "height"},
+              "stroke": {"value": "red"},
+              "strokeWidth": {"value": 2}
+            },
+            "update": {"x": {"scale": "x1", "signal": "knee_point"}}
+          }
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "lower_plot",
+      "encode": {
+        "enter": {
+          "x": {"value": 0},
+          "y": {"value": 500},
+          "width": {"value": 900},
+          "height": {"value": 400}
+        }
+      },
+      "scales": [
+        {
+          "name": "x2",
+          "type": "linear",
+          "domain": {"data": "samples", "field": "reads"},
+          "nice": true,
+          "range": "width"
+        },
+        {
+          "name": "y2",
+          "type": "linear",
+          "domain": {"data": "cumulative", "field": "samples_geq_reads"},
+          "nice": true,
+          "range": "height"
+        }
+      ],
+      "axes": [
+        {"scale": "x2", "orient": "bottom", "title": "Sequencing Depth","titleFontSize": 12,"titleFontWeight": "normal","labelFontSize": 10},
+        {"scale": "y2", "orient": "left", "title": "Number of Samples","titleFontSize": 12,"titleFontWeight": "normal","labelFontSize": 10}
+      ],
+      "marks": [
+        {
+          "type": "group",
+          "from": {
+            "facet": {
+              "name": "faceted",
+              "data": "cumulative",
+              "groupby": "group"
+            }
+          },
+          "marks": [
+            {
+              "type": "line",
+              "from": {"data": "faceted"},
+              "encode": {
+                "enter": {
+                  "x": {"scale": "x2", "field": "reads"},
+                  "y": {"scale": "y2", "field": "samples_geq_reads"},
+                  "stroke": {"scale": "color", "field": "group"},
+                  "strokeWidth": {"value": 1}
+                }
+              }
+            },
+            {
+              "type": "symbol",
+              "from": {"data": "faceted"},
+              "encode": {
+                "enter": {
+                  "x": {"scale": "x2", "field": "reads"},
+                  "y": {"scale": "y2", "field": "samples_geq_reads"},
+                  "fill": {"scale": "color", "field": "group"},
+                  "size": {"value": 20}
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "legends": [
+    {
+      "fill": "color",
+      "title": "Group",
+      "orient": "bottom",
+      "encode": {
+        "symbols": {"update": {"size": {"value": 100}}},
+        "labels": {"update": {"fontSize": {"value": 12}}}
+      }
+    }
+  ],
+  "config": {}
+}

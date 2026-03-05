@@ -91,8 +91,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     meta = meta_data.to_dataframe()
     meta.index.name = "sample"
     metadata_columns = ["sample"] + meta.columns.tolist()
-    print(metadata_columns)
-    print(type(metadata_columns))
     
     #run seqs_to_kmers if sequence is provided
     kmer_run = False
@@ -126,19 +124,9 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     sorted_depths_pass = [int(depth) for depth in sorted_depths.tolist()] 
     reads_per_sample_pass = [int(read) for read in reads_per_sample.tolist()]
 
-    #testing
     meta.fillna(0, inplace=True)
     reads_per_sample_merged = pd.DataFrame({"sample": table_df.index.tolist(), "reads": reads_per_sample_pass})
-    reads_per_sample_merged = reads_per_sample_merged.merge(meta, left_on="sample", right_index=True, how="left")
-    #delete after testing (saving part)
-    out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
-    os.makedirs(out_dir, exist_ok=True)
-    reads_per_sample_merged.to_json(
-        os.path.join(out_dir, "reads_per_sample_merged.json"), orient="records", indent=2)
-    
-    print("reads per sample merged df:")
-    print(reads_per_sample_merged.head())
-    
+    reads_per_sample_merged = reads_per_sample_merged.merge(meta, left_on="sample", right_index=True, how="left")     
     reads_per_sample_merged.index.name = "sample"
     reads_per_sample_merged = (reads_per_sample_merged.rename(columns={"sample": "sample-id"}).set_index("sample-id"))
    
@@ -227,11 +215,10 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             #making the mean_df which I would need for the knee point calculation
             mean_df = (combined.groupby(['sample', 'read_depth'], as_index=False).agg(mean_observed=('observed', 'mean')))
         
-        print(combined.head())
-        out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
+        """out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
         os.makedirs(out_dir, exist_ok=True)
         combined.to_json(
-            os.path.join(out_dir, f"iter_data.json"), orient="records", indent=2)
+            os.path.join(out_dir, f"iter_data.json"), orient="records", indent=2)"""
         
         #calculatin knee point here as data formats are a bit different
         knee_points = [None] * len(sample_list)
@@ -259,8 +246,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
  
         combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
         combined = combined.set_index('id')
-
-        print(combined.index.names)         
+      
         combined = qiime2.Metadata(combined)
         visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass,
                         sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm,
@@ -422,7 +408,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     if metric in ['braycurtis', 'jaccard']:
         beta = True
         #line_plot_title = 'Beta Rarefaction Curve'
-
         avg_range = [None] * (len(max_range)-1)
         for i in range(1, len(max_range)):
             avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
@@ -439,10 +424,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
 
     #alpha metric specific code
     else:
-        #line_plot_title = 'Rarefaction Curves'
-        #combined_df['sample'] = sample_names
-        #line_chart_df = combined_df
-        #added so I won't get errors for now
         line_chart_df = combined.to_dataframe().reset_index()
         sorted_depths = pd.Series(sorted_depths)
         reads_per_sample = pd.DataFrame(reads_per_sample)
@@ -460,12 +441,9 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         #is this still needed?
         reads_per_sample_df = reads_per_sample.reset_index()
         reads_per_sample_df.columns = ['sample', 'reads_per_sample']
-        meta = metadata.to_dataframe()
         reads_per_sample_df["sample"] = reads_per_sample_df["sample"].astype(str)
         
-        print("--------------------------------")
         rps = rps.to_dataframe().reset_index()
-        print("rps:", rps.head())
 
         # Read the JSON file back into a DataFrame
         """out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
@@ -498,9 +476,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         graph_data = "Distance"
 
     #make 2 plots a 1 line plot, 1 barplot  
-    #original way to get the vega json for the altair plot
-    #vega_json = combined_chart.to_json() 
-
     TEMPLATES = os.path.join(
         os.path.dirname(__file__),
         "assets"
@@ -559,8 +534,14 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
             if signal["name"] == "knee_point":
                 signal["value"] = int(depth_threshold)"""
         
+        #saving testing data
+        """out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
+        os.makedirs(out_dir, exist_ok=True)
+        combined.to_dataframe().to_json(
+            os.path.join(out_dir, "combined_alpha.json"), orient="records", indent=2)"""
+        
         #trying to make the number samples plot
-        with open(os.path.join(TEMPLATES, "alpha-div-number-samples-no-data.json")) as f:
+        """with open(os.path.join(TEMPLATES, "alpha-div-number-samples-no-data.json")) as f:
             spec = json.load(f)
 
         for d in spec["data"]:
@@ -571,14 +552,33 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         for signal in spec["signals"]:
             if signal["name"] == "groupField":
                 metadata_columns.remove("sample")
-                signal["bind"]["options"] = ["sample-id"] + metadata_columns
+                signal["bind"]["options"] = ["sample-id"] + metadata_columns"""
+        
+        # concatenated alpha-div plot
+        with open(os.path.join(TEMPLATES, "alpha-div-concatenated-no-data.json")) as f:
+            spec = json.load(f)
 
+        for d in spec["data"]:
+            if d["name"] == "raw":
+                combined = combined.to_dataframe().reset_index()
+                d["values"] = combined.to_dict(orient='records')
+        
+        for d in spec["data"]:
+            if d["name"] == "samples":
+                rps.rename(columns={"sample-id": "sample"}, inplace=True)
+                rps = rps.set_index("sample").reset_index()
+                d["values"] = rps.to_dict(orient='records')
+
+        for signal in spec["signals"]:
+            if signal["name"] == "groupField":
+                signal["bind"]["options"] = metadata_columns
+            if signal["name"] == "knee_point":
+                signal["value"] = int(depth_threshold)
     
     vega_json = json.dumps(spec)
-    with open(os.path.join(TEMPLATES, "alpha-div-populated.json"), 'w') as f:
-        json.dump(spec, f, indent=2)
+    #with open(os.path.join(TEMPLATES, "alpha-div-populated.json"), 'w') as f:
+    #    json.dump(spec, f, indent=2)
     
-
     if (knee_point > depth_threshold) and (not beta):
         add_text = True
 
