@@ -1,0 +1,134 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "width": 700,
+  "height": 450,
+  "padding": {"bottom": 5, "left": 5, "right": 5, "top": 20},
+  "signals": [
+    {
+      "name": "groupField",
+      "value": "body-site",
+      "bind": {"input": "select", "options": [], "name": "Group by: "}
+    }
+  ],
+  "data": [
+    {"name": "samples", "values": []},
+    {
+      "name": "samples_with_group",
+      "source": "samples",
+      "transform": [
+        {"type": "formula", "as": "group", "expr": "datum[groupField]"}
+      ]
+    },
+    {
+      "name": "counts",
+      "source": "samples_with_group",
+      "transform": [
+        {
+          "type": "aggregate",
+          "groupby": ["group", "reads"],
+          "ops": ["count"],
+          "as": ["count"]
+        }
+      ]
+    },
+    {
+      "name": "sorted",
+      "source": "counts",
+      "transform": [
+        {
+          "type": "collect",
+          "sort": {
+            "field": ["group", "reads"],
+            "order": ["ascending", "descending"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cumulative",
+      "source": "sorted",
+      "transform": [
+        {
+          "type": "window",
+          "groupby": ["group"],
+          "ops": ["sum"],
+          "fields": ["count"],
+          "as": ["samples_geq_reads"]
+        }
+      ]
+    }
+  ],
+  "scales": [
+    {
+      "name": "x",
+      "type": "linear",
+      "domain": {"data": "samples", "field": "reads"},
+      "nice": true,
+      "range": "width"
+    },
+    {
+      "name": "y",
+      "type": "linear",
+      "domain": {"data": "cumulative", "field": "samples_geq_reads"},
+      "nice": true,
+      "range": "height"
+    },
+    {
+      "name": "color",
+      "type": "ordinal",
+      "domain": {"data": "samples_with_group", "field": "group"},
+      "range": {"scheme": "category10"}
+    }
+  ],
+  "axes": [
+    {"scale": "x", "orient": "bottom", "title": "Read Depth"},
+    {"scale": "y", "orient": "left", "title": "Number of Samples"}
+  ],
+  "marks": [
+    {
+      "type": "group",
+      "from": {
+        "facet": {"name": "faceted", "data": "cumulative", "groupby": "group"}
+      },
+      "marks": [
+        {
+          "type": "group",
+          "from": {
+            "facet": {
+              "name": "faceted",
+              "data": "cumulative",
+              "groupby": "group"
+            }
+          },
+          "marks": [
+            {
+              "type": "line",
+              "from": {"data": "faceted"},
+              "encode": {
+                "enter": {
+                  "x": {"scale": "x", "field": "reads"},
+                  "y": {"scale": "y", "field": "samples_geq_reads"},
+                  "stroke": {"scale": "color", "field": "group"},
+                  "strokeWidth": {"value": 1}
+                }
+              }
+            },
+            {
+              "type": "symbol",
+              "from": {"data": "faceted"},
+              "encode": {
+                "enter": {
+                  "x": {"scale": "x", "field": "reads"},
+                  "y": {"scale": "y", "field": "samples_geq_reads"},
+                  "fill": {"scale": "color", "field": "group"},
+                  "size": {"value": 20}
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "config": {}
+}

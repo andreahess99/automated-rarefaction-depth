@@ -12,7 +12,7 @@ from qiime2.plugin import (Plugin, Str, Choices, Int, Bool, Range, Float, List,
 from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.feature_data import FeatureData, Sequence
 from automated_rarefaction_depth import __version__
-from automated_rarefaction_depth._boots_pipeline import pipeline_boots, _rf_visualizer_boots, _beta_viz, _combined_viz
+from automated_rarefaction_depth._boots_pipeline import pipeline_boots, _rf_visualizer_boots,  _combined_viz #_beta_viz,
 
 
 citations = Citations.load("citations.bib", package="automated_rarefaction_depth")
@@ -151,7 +151,7 @@ plugin.visualizers.register_function(
 )
 
 #beta visualizer
-plugin.visualizers.register_function(
+"""plugin.visualizers.register_function(
     function=_beta_viz,
     inputs={},
     parameters={'metric': Str % Choices(['braycurtis', 'jaccard']),
@@ -173,7 +173,7 @@ plugin.visualizers.register_function(
     name='Automated Rarefaction Depth',
     description=("Calculates the knee point and produces the visualization for beta metrics."),
     citations=citations,
-)
+)"""
 
 #combined visualizer
 plugin.visualizers.register_function(
@@ -196,8 +196,9 @@ plugin.visualizers.register_function(
                 'algorithm': Str % Choices(['kneedle', 'gradient']),
                 'calc_array': List[Float],
                 'num_samples_left': List[Int],
-                #added parameters for the alpha visualization with metadata
-                'metadata_columns': List[Str]
+                'metadata_columns': List[Str],
+                'metadata': Metadata,
+                'rps': Metadata
                 },
     input_descriptions={
         #'combined_df': 'A table containing the number of distinct features that were found in a sample at a specific depth.'

@@ -22,7 +22,7 @@ import time
 import matplotlib.pyplot as plt
 
 
-def altair_theme():
+"""def altair_theme():
         font = "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif"
         return {
         "config" : {
@@ -49,7 +49,7 @@ def altair_theme():
                   "fontSize": 16
              }
         }
-    }
+    }"""
 
 
 _pipe_defaults = {
@@ -83,26 +83,16 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     alpha_action = ctx.get_action('boots', 'alpha')
     beta_action = ctx.get_action('boots', 'beta')
     kmer_action = ctx.get_action('kmerizer', 'seqs_to_kmers')
-    #viz_action = ctx.get_action('rarefaction-depth', '_rf_visualizer_boots')
-    #beta_viz_action = ctx.get_action('rarefaction-depth', '_beta_viz')
     viz_combined_action = ctx.get_action('rarefaction-depth', '_combined_viz')
-    #for testing
     alpha_collection_action = ctx.get_action("boots", "alpha_collection")
 
     table_df = table.view(pd.DataFrame)
 
     meta = meta_data.to_dataframe()
     meta.index.name = "sample"
-    #metadata_columns = json.dumps(["sample"] + meta.columns.tolist())
     metadata_columns = ["sample"] + meta.columns.tolist()
     print(metadata_columns)
     print(type(metadata_columns))
-    
-    #print(meta.head())
-    """sample_ids = meta[meta['extract-group-no'] == 'H'].index.tolist()
-    print("Samples with H:", sample_ids)
-    #filtering table according to metadata --> test different things
-    table_df = table_df.loc[sample_ids]"""
     
     #run seqs_to_kmers if sequence is provided
     kmer_run = False
@@ -135,6 +125,23 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     sorted_depths = reads_per_sample.sort_values()
     sorted_depths_pass = [int(depth) for depth in sorted_depths.tolist()] 
     reads_per_sample_pass = [int(read) for read in reads_per_sample.tolist()]
+
+    #testing
+    meta.fillna(0, inplace=True)
+    reads_per_sample_merged = pd.DataFrame({"sample": table_df.index.tolist(), "reads": reads_per_sample_pass})
+    reads_per_sample_merged = reads_per_sample_merged.merge(meta, left_on="sample", right_index=True, how="left")
+    #delete after testing (saving part)
+    out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
+    os.makedirs(out_dir, exist_ok=True)
+    reads_per_sample_merged.to_json(
+        os.path.join(out_dir, "reads_per_sample_merged.json"), orient="records", indent=2)
+    
+    print("reads per sample merged df:")
+    print(reads_per_sample_merged.head())
+    
+    reads_per_sample_merged.index.name = "sample"
+    reads_per_sample_merged = (reads_per_sample_merged.rename(columns={"sample": "sample-id"}).set_index("sample-id"))
+   
 
     sample_loss_index = int(np.ceil((1-percent_samples) * len(sorted_depths))) - 1 
     depth_threshold = int(sorted_depths.iloc[sample_loss_index])
@@ -185,9 +192,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         clean_max_range = [float(x) for x in max_range]
         clean_avg_diff = [float(x) if x is not None else 0.0 for x in avg_difference]
         clean_samples_left = [int(x) for x in num_samples_left]
-        #original beta visualization function call
-        #visualization, = beta_viz_action(max_range=clean_max_range, kmer_run=kmer_run, calc_array=clean_avg_diff, metric=metric, algorithm=algorithm, num_samples_left=clean_samples_left)
-        #new combined visualization function call
+        # combined visualization function call
         visualization, = viz_combined_action(max_range=clean_max_range, kmer_run=kmer_run, calc_array=clean_avg_diff, metric=metric, algorithm=algorithm, num_samples_left=clean_samples_left)
     
     else:
@@ -217,13 +222,10 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             #potentially do it after the loop so you only merge once 
             meta.fillna(0, inplace=True)
             combined = combined.merge(meta, left_on="sample", right_index=True, how="left")
-            print(combined.columns)
-            print(combined.head())
 
             # Calculate average after collecting all iterations for this depth
             #making the mean_df which I would need for the knee point calculation
             mean_df = (combined.groupby(['sample', 'read_depth'], as_index=False).agg(mean_observed=('observed', 'mean')))
-            #print(mean_df)
         
         print(combined.head())
         out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
@@ -232,7 +234,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             os.path.join(out_dir, f"iter_data.json"), orient="records", indent=2)
         
         #calculatin knee point here as data formats are a bit different
-        print(f"max range for knee point calculation: {max_range}")
         knee_points = [None] * len(sample_list)
         for i, sample in enumerate(sample_list):
             array_sample = mean_df[mean_df['sample'] == sample]['mean_observed'].values
@@ -244,37 +245,14 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         print("calculated rarefaction depth:")
         print(knee_point)
         combined_df = mean_df.pivot(index='sample', columns='read_depth', values='mean_observed').reset_index()
-
-        """pd_new = pd.DataFrame(
-            np.nan,  
-            index=table_df.index, 
-            columns=[f"Step_{j+1}" for j in range(steps)]  
-        )
-
-        dfs = []
-        for i, artifact in enumerate(artifacts_list):
-            df = artifact.view(pd.Series).to_frame(name='observed_features')
-            dfs.append(df)
-            for j, sample in enumerate(sample_list):
-                if sample in df.index:
-                    pd_new.iloc[j, i] = df.loc[sample].values[0].round().astype(int)
-                else:
-                    pd_new.iloc[j, i] = np.nan
-
-        combined_df, knee_point = _rf_knee_locator(artifacts_list=pd_new, sample_list=sample_list,
-                                                steps=steps, algorithm=algorithm, max_reads=max_reads)"""
         
         sample_names = combined_df.iloc[:, -1].tolist()
         combined_df = combined_df.drop(combined_df.columns[-1], axis=1)
 
         combined_df.index = combined_df.index.astype(str)
-        #combined_artifact = qiime2.Artifact.import_data("FeatureTable[Frequency]", combined_df)
-
+    
         percent_samples_100 = round(percent_samples * 100, 2)
 
-        #visualization, = viz_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples=percent_samples, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
-        #                sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm)
-        #actual visualization
         #visualization, = viz_combined_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
         #                sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm)
         #added for testing
@@ -286,7 +264,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         combined = qiime2.Metadata(combined)
         visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass,
                         sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm,
-                        combined=combined, metadata_columns=metadata_columns) 
+                        combined=combined, metadata_columns=metadata_columns, metadata=meta_data, rps=qiime2.Metadata(reads_per_sample_merged)) 
 
     return visualization
 
@@ -306,7 +284,7 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
 
 
 #calculates the knee point and makes the visualization for beta rarefaction
-def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_array: list[float] , metric: str, algorithm: str, num_samples_left: list[int])->None:
+"""def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_array: list[float] , metric: str, algorithm: str, num_samples_left: list[int])->None:
  
     avg_range = [None] * (len(max_range)-1)
     for i in range(1, len(max_range)):
@@ -419,14 +397,14 @@ def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_arra
         dirs_exist_ok=True 
     )
    
-    q2templates.render(templates, output_dir, context=beta_context)
+    q2templates.render(templates, output_dir, context=beta_context)"""
 
 
 # combined visualization function for alpha and beta metrics
 # to do: add some text somewhere if kmer was run?
 def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, calc_array: list[float] = None, algorithm: str = "kneedle", num_samples_left: list[int] = None, 
                   percent_samples_100: float = 0, reads_per_sample: list[int] = None, sorted_depths: list[int] = None, max_reads: int = 1, depth_threshold: int = 1, knee_point: int = 0, max_read_percentile: int = 1,# combined_df: pd.DataFrame = None, sample_names: list[str] = None,
-                  metadata_columns: list[str] = None, combined: qiime2.Metadata = None)->None: #added metadata_columns and combined for the alpha visualization with metadata  
+                  metadata_columns: list[str] = None, combined: qiime2.Metadata = None, metadata: qiime2.Metadata = None, rps:qiime2.Metadata = None)->None: #added metadata_columns, metadata and combined for the alpha visualization with metadata  
     
     #default values for the tabbed_context
     add_text = False
@@ -439,18 +417,11 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     graph_name = str(metric)
     beta = False
 
-    #plotting with altair
-    alt.themes.register('altair_theme', altair_theme)
-    alt.themes.enable('altair_theme')
-    alt.data_transformers.disable_max_rows()
-
-    #testing
-    print("combined df for visualization:", combined)
 
     # beta metric specific code
     if metric in ['braycurtis', 'jaccard']:
         beta = True
-        line_plot_title = 'Beta Rarefaction Curve'
+        #line_plot_title = 'Beta Rarefaction Curve'
 
         avg_range = [None] * (len(max_range)-1)
         for i in range(1, len(max_range)):
@@ -468,7 +439,7 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
 
     #alpha metric specific code
     else:
-        line_plot_title = 'Rarefaction Curves'
+        #line_plot_title = 'Rarefaction Curves'
         #combined_df['sample'] = sample_names
         #line_chart_df = combined_df
         #added so I won't get errors for now
@@ -486,133 +457,47 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         lower_value = round(sorted_depths.iloc[lower_index])
         upper_value = round(sorted_depths.iloc[upper_index])
 
-        depth_lines = pd.DataFrame({
-            'x': [lower_value, knee_point, upper_value],  
-            'label': ['-5%', 'Knee point', '+5%']  
-        })
-
+        #is this still needed?
         reads_per_sample_df = reads_per_sample.reset_index()
         reads_per_sample_df.columns = ['sample', 'reads_per_sample']
+        meta = metadata.to_dataframe()
+        reads_per_sample_df["sample"] = reads_per_sample_df["sample"].astype(str)
+        
+        print("--------------------------------")
+        rps = rps.to_dataframe().reset_index()
+        print("rps:", rps.head())
+
+        # Read the JSON file back into a DataFrame
+        """out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
+        os.makedirs(out_dir, exist_ok=True)
+        reads_per_sample_merged = pd.read_json(os.path.join(out_dir, "reads_per_sample_merged.json"), orient="records")
+        print("reads per sample merged df:")
+        print(reads_per_sample_merged.head())"""
    
     # specify names and titles according to what was run
     if kmer_run:
-        title_x = 'Total Kmer Count'
-        title_y = '# Observed Distinct Kmers'
+        #title_x = 'Total Kmer Count'
+        #title_y = '# Observed Distinct Kmers'
         graph_data = "number of observed kmers"
         graph_name = "Kmers"
-        barplot_title = 'Kmers per Sample'
-        property_title = 'Histogram of Kmers per Sample'
+        #barplot_title = 'Kmers per Sample'
+        #property_title = 'Histogram of Kmers per Sample'
     else:
-        title_x = 'Read Depth'
-        title_y = '# Observed Features'
+        #title_x = 'Read Depth'
+        #title_y = '# Observed Features'
         graph_data = "number of observed features"
         graph_name = "Reads"
-        barplot_title = 'Reads per Sample'
-        property_title = 'Histogram of Reads per Sample'
+        #barplot_title = 'Reads per Sample'
+        #property_title = 'Histogram of Reads per Sample'
 
     if metric == 'shannon':
-        title_y = 'Shannon Index'
+        #title_y = 'Shannon Index'
         graph_data = "Shannon Index"
     if beta:
-        title_y = 'Distance'
+        #title_y = 'Distance'
         graph_data = "Distance"
 
-
-    #make 2 plots a 1 line plot, 1 barplot
-    #commented out for testing
-    #line_chart_df = line_chart_df.dropna(subset=['observed_features'])
-
-    """zoom = alt.selection_interval(bind='scales')
-    param_checkbox = alt.param(
-        bind=alt.binding_checkbox(name='Show read depth specified by slider as a line on the plot: ')) 
-    s = alt.param(
-        name='position', bind=alt.binding_range(min=0, max=max_reads, step=20, name='Rarefaction Depth Line'), value=knee_point)
-
-    base = alt.Chart(line_chart_df).mark_line(point=True).encode(
-            x=alt.X('depth:Q', title=title_x),
-            y=alt.Y('observed_features:Q', title=title_y),
-            color=alt.Color('sample:N', legend=None).scale(scheme='category10')
-        ).properties(
-            width=450,
-            height=350,
-            title=line_plot_title
-        ).add_params(zoom, param_checkbox) 
-    
-    moving_line = alt.Chart(pd.DataFrame({'position': [0]})).mark_rule(
-            color='black', strokeWidth=2, strokeDash=[2, 2]).encode( 
-                x='position:Q'
-            ).add_params(s).transform_calculate(position='position'
-            ).transform_filter(param_checkbox)
-
-    if beta:
-        static_line = alt.Chart(pd.DataFrame({'position': [knee_point]})).mark_rule(
-            color='red', strokeWidth=2).encode(x='position:Q').properties()
-        final_chart = alt.layer(base, static_line).resolve_scale(x='shared', y='shared').encode(x=alt.X(scale=alt.Scale(domainMin=0)))
-
-    else:
-        shaded_area = alt.Chart(pd.DataFrame({
-            'x_min': [0], 'x_max': [depth_threshold]
-        })).mark_rect(opacity=0.7, color='peachpuff').encode(
-            x='x_min:Q', x2='x_max:Q')
-        
-        my_colors = ["#377eb8", "#f781bf", "#984ea3"]
-
-        vertical_lines = alt.Chart(depth_lines).mark_rule(strokeWidth=2).encode(
-            x='x:Q',
-            color=alt.Color('label:N', legend=alt.Legend(title="Thresholds"), scale=alt.Scale(range=my_colors))
-        )
-        final_chart = alt.layer(
-            shaded_area, base, vertical_lines
-        ).resolve_scale(
-            x='shared', color='independent'
-        ).properties(
-            title='Rarefaction Curves', width=450, height=350)
-    
-    rf_line_plot = alt.layer(final_chart, moving_line).resolve_scale(x='shared', y='shared')"""
-
-    #barplot
-    if beta:
-        #df_bars = pd.DataFrame({'depth': max_range, 'num_samples_left': num_samples_left})
-        df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
-        """barplot = alt.Chart(df_bars).mark_bar(color='steelblue').encode(
-                x=alt.X('depth:Q', title='Read Depth', scale=alt.Scale(domainMin=0)),
-                y=alt.Y('num_samples_left:Q', title='Number of Samples Left')
-            ).add_params(zoom).properties(width=450, height=350, title='Samples Remaining at each Rarefaction Depth')"""
-
-    else:
-        """predicate = alt.datum.reads_per_sample >= s
-        barplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
-            x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title=barplot_title),
-            y=alt.Y('count()', title='# Samples'),
-            color=alt.value('steelblue')  
-        ).add_params(s, zoom).transform_filter(predicate).transform_calculate(position='position'
-        ).properties(title=property_title, width=450, height=350)
-
-        background = alt.Chart(reads_per_sample_df).mark_bar().encode(
-            x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title=barplot_title),  
-            y=alt.Y('count()', title='# Samples'),
-            color=alt.value('lightgrey')
-        ).add_params(zoom).properties(title=property_title, width=450, height=350)
-
-        barplot = alt.layer(background, barplot).resolve_scale(x='shared', y='shared')
-
-    text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
-    upper_chart = alt.vconcat(rf_line_plot, text_lines).properties(spacing=0)
-    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
-    upper_chart = alt.vconcat(empty_lines, upper_chart).properties(spacing=0)
-
-    bar_space = alt.vconcat(barplot, text_lines).properties(spacing=0)
-    bar_space = alt.vconcat(empty_lines, bar_space).properties(spacing=0)
-
-    combined_chart = alt.hconcat(upper_chart, bar_space).properties(spacing=60).configure_legend(labelFontSize=14, titleFontSize=14)
-    
-    combined_chart["padding"] = {
-        "top": 0,
-        "left": 0,
-        "right": 0,
-        "bottom":  -49  
-    }"""
-   
+    #make 2 plots a 1 line plot, 1 barplot  
     #original way to get the vega json for the altair plot
     #vega_json = combined_chart.to_json() 
 
@@ -623,6 +508,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
 
     #trying to dynamically populate my vega plot
     if beta:
+        #df_bars = pd.DataFrame({'depth': max_range, 'num_samples_left': num_samples_left})
+        df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
         with open(os.path.join(TEMPLATES, "beta_complete_viz.json")) as f:
             spec = json.load(f)
 
@@ -657,7 +544,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 signal["value"] = int(knee_point)"""
         
         #trying to make it look like the alpha diversity plot
-        with open(os.path.join(TEMPLATES, "alpha-div.json")) as f:
+        #this works!! gives me the alpha-div line plot
+        """with open(os.path.join(TEMPLATES, "alpha-div.json")) as f:
             spec = json.load(f)
 
         for d in spec["data"]:
@@ -669,7 +557,21 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
             if signal["name"] == "groupField":
                 signal["bind"]["options"] = metadata_columns
             if signal["name"] == "knee_point":
-                signal["value"] = int(depth_threshold)
+                signal["value"] = int(depth_threshold)"""
+        
+        #trying to make the number samples plot
+        with open(os.path.join(TEMPLATES, "alpha-div-number-samples-no-data.json")) as f:
+            spec = json.load(f)
+
+        for d in spec["data"]:
+            if d["name"] == "samples":
+                rps = rps.set_index("sample-id").reset_index()
+                d["values"] = rps.to_dict(orient='records')
+
+        for signal in spec["signals"]:
+            if signal["name"] == "groupField":
+                metadata_columns.remove("sample")
+                signal["bind"]["options"] = ["sample-id"] + metadata_columns
 
     
     vega_json = json.dumps(spec)
