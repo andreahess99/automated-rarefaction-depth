@@ -134,7 +134,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     sample_loss_index = int(np.ceil((1-percent_samples) * len(sorted_depths))) - 1 
     depth_threshold = int(sorted_depths.iloc[sample_loss_index])
 
-    artifacts_list = []
     sample_list = table_df.index.tolist()
 
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
@@ -167,13 +166,11 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 difference = np.abs(new_dm.data - old_dm.data)
                 
                 avg_difference[i-1] = np.mean(difference[np.triu_indices_from(difference, k=1)])
-                #print(f"average difference to previous step: {avg_difference[i-1]}")
                 median_difference[i-1] = np.median(difference[np.triu_indices_from(difference, k=1)])
                 std_difference[i-1] = np.std(difference[np.triu_indices_from(difference, k=1)])
                 p75_25_difference[i-1] = np.percentile(difference[np.triu_indices_from(difference, k=1)], 75) - np.percentile(difference[np.triu_indices_from(difference, k=1)], 25)
 
                 avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
-                #print(f"average range between steps: {avg_range[i-1]}")
             
             old_beta_result = beta_result
 
@@ -187,8 +184,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         #if alpha metric was chosen
         #testing 
         dfs = []
-        combined_depth_df = pd.DataFrame()
-
+    
         for i in range(steps):
             print(f"step {i+1}: {max_range[i]}")
             """result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
@@ -221,28 +217,30 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             os.path.join(out_dir, f"iter_data.json"), orient="records", indent=2)"""
         
         #calculatin knee point here as data formats are a bit different
+        if metric in ['observed_features', 'shannon', 'simpson', 'brillouin_d', 'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit']:
+            curve_type = "concave"
+            direction = "increasing"
+        elif metric in ['dominance', 'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'lladser_pe', 'jaccard', 'braycurtis']:
+            curve_type = "convex"
+            direction = "decreasing"
         knee_points = [None] * len(sample_list)
         for i, sample in enumerate(sample_list):
             array_sample = mean_df[mean_df['sample'] == sample]['mean_observed'].values
             max_range_for_sample = max_range[:len(array_sample)]
-            knee_points[i] = knee_point_locator(max_range_for_sample, array_sample, algorithm, "alpha")
+            knee_points[i] = knee_point_locator(max_range_for_sample, array_sample, algorithm, curve_type, direction)
         
         knee_points_filtered = [point for point in knee_points if point is not None] 
+        print("knee points for each sample:", knee_points_filtered)
         knee_point = round(np.mean(knee_points_filtered))
         print("calculated rarefaction depth:")
         print(knee_point)
         combined_df = mean_df.pivot(index='sample', columns='read_depth', values='mean_observed').reset_index()
         
-        sample_names = combined_df.iloc[:, -1].tolist()
         combined_df = combined_df.drop(combined_df.columns[-1], axis=1)
 
         combined_df.index = combined_df.index.astype(str)
     
         percent_samples_100 = round(percent_samples * 100, 2)
-
-        #visualization, = viz_combined_action(sample_names=sample_names, metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass, combined_df=combined_artifact,
-        #                sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm)
-        #added for testing
  
         combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
         combined = combined.set_index('id')
@@ -255,12 +253,9 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     return visualization
 
 #calculates the knee point based on the chosen algorithm & metric
-def knee_point_locator(range: list[float], samples: list[float], algorithm: str, metric:str) -> float:
+def knee_point_locator(range: list[float], samples: list[float], algorithm: str, curve_type:str, direction:str) -> float:
     if algorithm == 'kneedle':
-        if metric == 'alpha':
-            kneedle = KneeLocator(range, samples, curve="concave", direction="increasing", S=3)
-        else:
-            kneedle = KneeLocator(range, samples, curve="convex", direction="decreasing", S=3)
+        kneedle = KneeLocator(range, samples, curve=curve_type, direction=direction, S=3)
         knee_point = kneedle.knee
     else:
         first_derivative = np.gradient(samples, range)
@@ -277,7 +272,7 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
         avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
     
     #calculate knee  point
-    knee_point = knee_point_locator(avg_range[1:], calc_array[1:], algorithm, "beta")
+    knee_point = knee_point_locator(avg_range[1:], calc_array[1:], algorithm, "beta", "increasing")
     if knee_point is None:
         knee_point = 0
     else:
@@ -412,11 +407,10 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         for i in range(1, len(max_range)):
             avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
 
-        max_reads = avg_range[-1]
         line_chart_df = pd.DataFrame({'depth': avg_range[1:], 'observed_features': calc_array[1:]})
 
         #calculate knee  point
-        knee_point = knee_point_locator(avg_range[1:], calc_array[1:], algorithm, "beta")
+        knee_point = knee_point_locator(avg_range[1:], calc_array[1:], algorithm, "convex", "decreasing")
         if knee_point is None:
             knee_point = 0
         else:

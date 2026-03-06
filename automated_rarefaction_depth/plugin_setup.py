@@ -8,7 +8,7 @@
 
 import automated_rarefaction_depth
 from qiime2.plugin import (Plugin, Str, Choices, Int, Bool, Range, Float, List,
-                            Set, Visualization, Metadata, MetadataColumn, Citations)
+                            Set, Visualization, Metadata, Citations)
 from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.feature_data import FeatureData, Sequence
 from automated_rarefaction_depth import __version__
@@ -27,7 +27,6 @@ plugin = Plugin(
     citations=citations 
 )
  
-
 
 plugin.visualizers.register_function(
     function=automated_rarefaction_depth.rarefaction_depth,
@@ -68,7 +67,9 @@ plugin.pipelines.register_function(
                 'steps': Int % Range(10, 100), 
                 'algorithm': Str % Choices("kneedle", "gradient"),
                 'seed': Int % Range(1, None),
-                'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard']), #
+                'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard', 'simpson', 'brillouin_d', 
+                                         'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit','dominance',
+                                         'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'lladser_pe' ]), #added more alpha-metric choices
                 'kmer_size': Int,
                 'tfidf': Bool,
                 'max_df': Float % Range(0, 1, inclusive_start=True,
@@ -178,20 +179,19 @@ plugin.visualizers.register_function(
 #combined visualizer
 plugin.visualizers.register_function(
     function=_combined_viz,
-    inputs={#'combined_df': FeatureTable[Frequency],
-            #added for the alpha visualization with metadata -> also delete descriptions after
-            },
+    inputs={},
     parameters={'combined': Metadata,
                 'sorted_depths': List[Int],
                 'percent_samples_100': Float,
-                'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard']),
+                'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard', 'simpson', 'brillouin_d',
+                                         'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit','dominance',
+                                         'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'lladser_pe']),
                 'max_reads': Int % Range(1, None),
                 'max_read_percentile': Int % Range(1, 100),
                 'depth_threshold': Int % Range(1, None),
                 'reads_per_sample': List[Int],
                 'kmer_run': Bool,
                 'knee_point': Int,
-                #'sample_names': List[Str], 
                 'max_range': List[Float],
                 'algorithm': Str % Choices(['kneedle', 'gradient']),
                 'calc_array': List[Float],
@@ -200,11 +200,8 @@ plugin.visualizers.register_function(
                 'metadata': Metadata,
                 'rps': Metadata
                 },
-    input_descriptions={
-        #'combined_df': 'A table containing the number of distinct features that were found in a sample at a specific depth.'
-    },
+    input_descriptions={},
     parameter_descriptions={
-        #'sample_names': 'A list of all sample names.',
         'sorted_depths': 'A list of sorted depths as integers.',
         'max_read_percentile': 'The maximum read depth percentile used for linearly spacing the evaluated depths.',
         'percent_samples_100': 'The minimal percentage of samples you want to keep, between 0 and 100.',
