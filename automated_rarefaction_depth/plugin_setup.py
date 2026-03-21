@@ -67,9 +67,9 @@ plugin.pipelines.register_function(
                 'steps': Int % Range(10, 100), 
                 'algorithm': Str % Choices("kneedle", "gradient"),
                 'seed': Int % Range(1, None),
-                'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard', 'simpson', 'brillouin_d', 
+                'metrics': Set[Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard', 'simpson', 'brillouin_d', 
                                          'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit','dominance',
-                                         'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'lladser_pe' ]), #added more alpha-metric choices
+                                         'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'lladser_pe' ])], #added more alpha-metric choices
                 'kmer_size': Int,
                 'tfidf': Bool,
                 'max_df': Float % Range(0, 1, inclusive_start=True,
@@ -84,22 +84,18 @@ plugin.pipelines.register_function(
         'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',
         'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.',
         'seed': 'The seed used for the random sampling of samples in case the table is larger than the table_size parameter. A positive integer.',
-        'metric': 'The alpha diversity metric to use for the rarefaction curves. Either observed_features or shannon.',
+        'metrics': 'The alpha diversity metrics to use for the rarefaction curves. Either observed_features or shannon.',
         'kmer_size': 'Only needed for kmerizer! Length of kmers to generate.',
         'tfidf': 'Only needed for kmerizer! If True, kmers will be scored using TF-IDF and output '
-             'frequencies will be weighted by scores. If False, kmers are '
-             'counted without TF-IDF scores.',
+             'frequencies will be weighted by scores. If False, kmers are counted without TF-IDF scores.',
         'max_df': 'Only needed for kmerizer! Ignore kmers that have a frequency strictly higher than '
               'the given threshold. If float, the parameter represents a '
-              'proportion of sequences, if an integer it represents an '
-              'absolute count.',
+              'proportion of sequences, if an integer it represents an absolute count.',
         'min_df': 'Only needed for kmerizer! Ignore kmers that have a frequency strictly lower than '
               'the given threshold. If float, the parameter represents a '
-              'proportion of sequences, if an integer it represents an '
-              'absolute count.',
+              'proportion of sequences, if an integer it represents an absolute count.',
         'max_features': 'Only needed for kmerizer! If not None, build a vocabulary that only considers '
-                    'the top max_features ordered by frequency (or TF-IDF '
-                    'score).',
+                    'the top max_features ordered by frequency (or TF-IDF score).',
         'norm': 'Only needed for kmerizer! Normalization procedure applied to TF-IDF scores. Ignored '
             'if tfidf=False. l2: Sum of squares of vector elements is 1. '
             'l1: Sum of absolute values of vector elements is 1.'},
@@ -198,7 +194,9 @@ plugin.visualizers.register_function(
                 'num_samples_left': List[Int],
                 'metadata_columns': List[Str],
                 'metadata': Metadata,
-                'rps': Metadata
+                'rps': Metadata,
+                'metrics': List[Str],
+                'kp_list': Metadata
                 },
     input_descriptions={},
     parameter_descriptions={
@@ -215,7 +213,7 @@ plugin.visualizers.register_function(
         'max_range': 'The different read depths at which the distance matrix was calculated.',
         'calc_array': 'The array of the calculated points.',
         'num_samples_left': "This array contains how many samples are considered at the considered read depths.",
-        'metadata_columns': "The metadata columns that are present in the combined feature table."
+        'metadata_columns': "The metadata columns that are present in the combined feature table.",
     },
     name='Automated Rarefaction Depth',
     description=("Makes the graphs and produces the visualization for both alpha and beta diversity metrics."),

@@ -65,7 +65,7 @@ _pipe_defaults = {
     'min_df': 1,
     'max_features': None,
     'norm': 'None',
-    'metric': 'observed_features'
+    'metrics': {'observed_features'}
 }
 
 
@@ -75,7 +75,7 @@ warnings.simplefilter(action='ignore', category=RuntimeWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
  
 
-def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], metric=_pipe_defaults['metric'],
+def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], metrics=_pipe_defaults['metrics'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
                    seed = _pipe_defaults['seed'], kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
                    min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm']):
@@ -88,9 +88,15 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
 
     table_df = table.view(pd.DataFrame)
 
+    beta = False #adjust once I actually also do beta metrics again
+
     meta = meta_data.to_dataframe()
     meta.index.name = "sample"
     metadata_columns = ["sample"] + meta.columns.tolist()
+    #observed_features is always included
+    metrics.add('observed_features') 
+    print(metrics)
+    metric = list(metrics)[0] #for now just take the first metric in the set, will adjust later to do multiple metrics
     
     #run seqs_to_kmers if sequence is provided
     kmer_run = False
@@ -114,10 +120,10 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     reads_per_sample = table_df.sum(axis=1) 
     percentile = 90
     #adjust max_reads if kneedle and shannon -> maybe adjust the percentile later
-    if (metric == 'shannon' and kmer_run == True):
+    """if (metric == 'shannon' and kmer_run == True):
         percentile = 30
     elif (metric == 'shannon' and kmer_run == False):
-        percentile = 60
+        percentile = 60"""
     max_reads = int(np.percentile(reads_per_sample, percentile))
     
     sorted_depths = reads_per_sample.sort_values()
@@ -139,7 +145,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
 
     # beta metric specific code
-    if metric in ['braycurtis', 'jaccard']:
+    if beta:
         num_samples_left = [None] * (steps)
         avg_difference = [None] * (steps-1)
         median_difference = [None] * (steps-1)
@@ -184,56 +190,65 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         #if alpha metric was chosen
         #testing 
         dfs = []
-    
-        for i in range(steps):
-            print(f"step {i+1}: {max_range[i]}")
-            """result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
-            artifacts_list.append(result)"""
+        combined_dfs = []
+        knee_point_list = []
 
-            #for testing
-            #function to use if we want to get the data for each iteration and sample instead of just the average
-            #and then combine it into a dataframe to use for the visualization and knee point calculation
-            sample_data, = alpha_collection_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False)
-            for key, artifact in sample_data.items():
-                series = artifact.view(pd.Series)
-                df = series.reset_index()
-                df.columns = ['sample', 'observed']
-                df['iteration'] = key
-                df['read_depth'] = int(max_range[i])  
-                dfs.append(df)
+        for metric in metrics:
+            print("metric:", metric)
+            for i in range(steps):
+                print(f"step {i+1}: {max_range[i]}")
+                """result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
+                artifacts_list.append(result)"""
+
+                #for testing
+                #function to use if we want to get the data for each iteration and sample instead of just the average
+                #and then combine it into a dataframe to use for the visualization and knee point calculation
+                sample_data, = alpha_collection_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False)
+                for key, artifact in sample_data.items():
+                    series = artifact.view(pd.Series)
+                    df = series.reset_index()
+                    df.columns = ['sample', 'observed']
+                    df['iteration'] = key
+                    df['read_depth'] = int(max_range[i])  
+                    df['metric'] = metric
+                    dfs.append(df)
+                    
+                combined = pd.concat(dfs, ignore_index=True)
+                #potentially do it after the loop so you only merge once 
+                meta.fillna(0, inplace=True)
+                combined = combined.merge(meta, left_on="sample", right_index=True, how="left")
+
+                # Calculate average after collecting all iterations for this depth
+                #making the mean_df which I would need for the knee point calculation
+                mean_df = (combined.groupby(['sample', 'read_depth'], as_index=False).agg(mean_observed=('observed', 'mean')))
+            
+            """out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
+            os.makedirs(out_dir, exist_ok=True)
+            combined.to_json(
+                os.path.join(out_dir, f"iter_data.json"), orient="records", indent=2)"""
+            
+            combined_dfs.append(combined)
+            #calculatin knee point here as data formats are a bit different
+            if metric in ['observed_features', 'shannon', 'simpson', 'brillouin_d', 'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit']:
+                curve_type = "concave"
+                direction = "increasing"
+            elif metric in ['dominance', 'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'lladser_pe', 'jaccard', 'braycurtis']:
+                curve_type = "convex"
+                direction = "decreasing"
+            knee_points = [None] * len(sample_list)
+            for i, sample in enumerate(sample_list):
+                array_sample = mean_df[mean_df['sample'] == sample]['mean_observed'].values
+                max_range_for_sample = max_range[:len(array_sample)]
+                knee_points[i] = knee_point_locator(max_range_for_sample, array_sample, algorithm, curve_type, direction)
                 
-            combined = pd.concat(dfs, ignore_index=True)
-            #potentially do it after the loop so you only merge once 
-            meta.fillna(0, inplace=True)
-            combined = combined.merge(meta, left_on="sample", right_index=True, how="left")
+        
+            knee_points_filtered = [point for point in knee_points if point is not None] 
+            knee_point = round(np.mean(knee_points_filtered))
+            print("calculated rarefaction depth:")
+            print(knee_point)
+            knee_point_list.append((knee_point, metric))
 
-            # Calculate average after collecting all iterations for this depth
-            #making the mean_df which I would need for the knee point calculation
-            mean_df = (combined.groupby(['sample', 'read_depth'], as_index=False).agg(mean_observed=('observed', 'mean')))
-        
-        """out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
-        os.makedirs(out_dir, exist_ok=True)
-        combined.to_json(
-            os.path.join(out_dir, f"iter_data.json"), orient="records", indent=2)"""
-        
-        #calculatin knee point here as data formats are a bit different
-        if metric in ['observed_features', 'shannon', 'simpson', 'brillouin_d', 'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit']:
-            curve_type = "concave"
-            direction = "increasing"
-        elif metric in ['dominance', 'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'lladser_pe', 'jaccard', 'braycurtis']:
-            curve_type = "convex"
-            direction = "decreasing"
-        knee_points = [None] * len(sample_list)
-        for i, sample in enumerate(sample_list):
-            array_sample = mean_df[mean_df['sample'] == sample]['mean_observed'].values
-            max_range_for_sample = max_range[:len(array_sample)]
-            knee_points[i] = knee_point_locator(max_range_for_sample, array_sample, algorithm, curve_type, direction)
-        
-        knee_points_filtered = [point for point in knee_points if point is not None] 
-        print("knee points for each sample:", knee_points_filtered)
-        knee_point = round(np.mean(knee_points_filtered))
-        print("calculated rarefaction depth:")
-        print(knee_point)
+        print("knee point list:", knee_point_list)
         combined_df = mean_df.pivot(index='sample', columns='read_depth', values='mean_observed').reset_index()
         
         combined_df = combined_df.drop(combined_df.columns[-1], axis=1)
@@ -244,11 +259,20 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
  
         combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
         combined = combined.set_index('id')
+        print("combined", combined.head())
+        print(combined.columns)
+        print("combined metrics:", combined.metric.unique())
+
       
         combined = qiime2.Metadata(combined)
+        kp_df = pd.DataFrame(knee_point_list, columns=['knee', 'metric'])
+        kp_df.index.name = 'id'
+        kp_df.index = kp_df.index.astype(str)
+        knee_point_list = qiime2.Metadata(kp_df)
+        metrics = list(metrics)
         visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass,
                         sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm,
-                        combined=combined, metadata_columns=metadata_columns, metadata=meta_data, rps=qiime2.Metadata(reads_per_sample_merged)) 
+                        combined=combined, metadata_columns=metadata_columns, metadata=meta_data, rps=qiime2.Metadata(reads_per_sample_merged), kp_list=knee_point_list, metrics=metrics) 
 
     return visualization
 
@@ -385,7 +409,7 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
 # to do: add some text somewhere if kmer was run?
 def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, calc_array: list[float] = None, algorithm: str = "kneedle", num_samples_left: list[int] = None, 
                   percent_samples_100: float = 0, reads_per_sample: list[int] = None, sorted_depths: list[int] = None, max_reads: int = 1, depth_threshold: int = 1, knee_point: int = 0, max_read_percentile: int = 1,# combined_df: pd.DataFrame = None, sample_names: list[str] = None,
-                  metadata_columns: list[str] = None, combined: qiime2.Metadata = None, metadata: qiime2.Metadata = None, rps:qiime2.Metadata = None)->None: #added metadata_columns, metadata and combined for the alpha visualization with metadata  
+                  metadata_columns: list[str] = None, combined: qiime2.Metadata = None, metadata: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None, metrics: list[str]=None)->None: #added metadata_columns, metadata and combined for the alpha visualization with metadata  
     
     #default values for the tabbed_context
     add_text = False
@@ -419,18 +443,23 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     #alpha metric specific code
     else:
         line_chart_df = combined.to_dataframe().reset_index()
+        kp_list = kp_list.to_dataframe().reset_index()
+        kp_list = kp_list.drop('id', axis=1)
+        print("kp_list df:", kp_list, kp_list.shape)
+        kp_list = kp_list.to_dict(orient='records')
+        print("kp_list:", kp_list)
         sorted_depths = pd.Series(sorted_depths)
         reads_per_sample = pd.DataFrame(reads_per_sample)
 
         #finding +-5% points & at what percentile knee point is
-        index = np.searchsorted(sorted_depths, knee_point)
+        """index = np.searchsorted(sorted_depths, knee_point)
         percentile = round((index / len(sorted_depths)) * 100, 2)
         lower_percentile = max(percentile - 5, 0) 
         upper_percentile = min(percentile + 5, 100) 
         lower_index = int((lower_percentile / 100) * len(sorted_depths))
         upper_index = min(int((upper_percentile / 100) * len(sorted_depths)), len(sorted_depths) - 1)
         lower_value = round(sorted_depths.iloc[lower_index])
-        upper_value = round(sorted_depths.iloc[upper_index])
+        upper_value = round(sorted_depths.iloc[upper_index])"""
 
         #is this still needed?
         reads_per_sample_df = reads_per_sample.reset_index()
@@ -495,83 +524,56 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 signal["value"] = int(knee_point)
 
     else:
-        """with open(os.path.join(TEMPLATES, "alpha_complete_viz.json")) as f:
-            spec = json.load(f)
-
-        for d in spec["data"]:
-            if d["name"] == "left_table":
-                d["values"] = line_chart_df.to_dict(orient='records')
-        
-        for d in spec["data"]:
-            if d["name"] == "right_raw":
-                d["values"] = reads_per_sample_df.to_dict(orient='records')
-        
-        for signal in spec.get("signals", []):
-            if signal["name"] == "inject_1":
-                signal["value"] = int(depth_threshold)
-            if signal["name"] == "inject_2":
-                signal["value"] = int(knee_point)"""
-        
-        #trying to make it look like the alpha diversity plot
-        #this works!! gives me the alpha-div line plot
-        """with open(os.path.join(TEMPLATES, "alpha-div.json")) as f:
-            spec = json.load(f)
-
-        for d in spec["data"]:
-            if d["name"] == "raw":
-                combined = combined.to_dataframe().reset_index()
-                d["values"] = combined.to_dict(orient='records')
-
-        for signal in spec["signals"]:
-            if signal["name"] == "groupField":
-                signal["bind"]["options"] = metadata_columns
-            if signal["name"] == "knee_point":
-                signal["value"] = int(depth_threshold)"""
-        
+        #trying to make it look like the alpha diversity plot        
         #saving testing data
         """out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
         os.makedirs(out_dir, exist_ok=True)
         combined.to_dataframe().to_json(
             os.path.join(out_dir, "combined_alpha.json"), orient="records", indent=2)"""
         
-        #trying to make the number samples plot
-        """with open(os.path.join(TEMPLATES, "alpha-div-number-samples-no-data.json")) as f:
-            spec = json.load(f)
+        
+        # concatenated alpha-div plot
+        #with open(os.path.join(TEMPLATES, "alpha-div-concatenated-no-data.json")) as f:
+        #    spec = json.load(f)
 
-        for d in spec["data"]:
-            if d["name"] == "samples":
-                rps = rps.set_index("sample-id").reset_index()
-                d["values"] = rps.to_dict(orient='records')
+        with open(os.path.join(TEMPLATES, "multiple_metrics_alpha_div.json")) as f:
+            spec = json.load(f)
 
         for signal in spec["signals"]:
             if signal["name"] == "groupField":
-                metadata_columns.remove("sample")
-                signal["bind"]["options"] = ["sample-id"] + metadata_columns"""
-        
-        # concatenated alpha-div plot
-        with open(os.path.join(TEMPLATES, "alpha-div-concatenated-no-data.json")) as f:
-            spec = json.load(f)
+                signal["bind"]["options"] = metadata_columns
+            #if signal["name"] == "knee_point":
+            #    signal["value"] = int(knee_point)
+            if signal["name"] == "metricField":
+                signal["bind"]["options"] = metrics
 
         for d in spec["data"]:
             if d["name"] == "raw":
                 combined = combined.to_dataframe().reset_index()
+                print("combined before dropping id:", combined.head(), combined.columns)
+                combined = combined.drop('id', axis=1)
+                print("combined for alpha-div plot:", combined.head(), combined.metric.unique(), combined.columns)
                 d["values"] = combined.to_dict(orient='records')
-        
+                """out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
+                os.makedirs(out_dir, exist_ok=True)
+                combined.to_json(os.path.join(out_dir, "combined_w_metric2.json"), orient="records", indent=2)"""
+
         for d in spec["data"]:
             if d["name"] == "samples":
                 rps.rename(columns={"sample-id": "sample"}, inplace=True)
                 rps = rps.set_index("sample").reset_index()
                 d["values"] = rps.to_dict(orient='records')
+            if d["name"] == "knee_points":
+                d["values"] = kp_list
 
-        for signal in spec["signals"]:
-            if signal["name"] == "groupField":
-                signal["bind"]["options"] = metadata_columns
-            if signal["name"] == "knee_point":
-                signal["value"] = int(depth_threshold)
+        
     
     vega_json = json.dumps(spec)
-    #with open(os.path.join(TEMPLATES, "alpha-div-populated.json"), 'w') as f:
-    #    json.dump(spec, f, indent=2)
+
+    """out_dir = "/home/andrea/automated-rarefaction-depth"
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "mm-populated.json"), 'w') as f:
+        json.dump(spec, f, indent=2)"""
     
     if (knee_point > depth_threshold) and (not beta):
         add_text = True
