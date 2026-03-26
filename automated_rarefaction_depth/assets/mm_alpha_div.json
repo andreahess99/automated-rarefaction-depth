@@ -1,6 +1,6 @@
 {
   "$schema": "https://vega.github.io/schema/vega/v5.json",
-  "width": 700,
+  "width": 800,
   "height": 400,
   "signals": [
     {
@@ -50,45 +50,23 @@
     },
     {"name": "samples", "values": []},
     {
-      "name": "samples_with_group",
+      "name": "samples_flat",
       "source": "samples",
-      "transform": [{"type": "formula", "as": "group", "expr": "datum[groupField]"}]
+      "transform": [
+        {"type": "flatten", "fields": ["all_depths"], "as": ["depth"]},
+        {"type": "formula", "as": "group", "expr": "datum[groupField]"},
+        {"type": "filter", "expr": "datum.reads >= datum.depth"}
+      ]
     },
     {
-      "name": "counts",
-      "source": "samples_with_group",
+      "name": "samples_at_depth",
+      "source": "samples_flat",
       "transform": [
         {
           "type": "aggregate",
-          "groupby": ["group", "reads"],
+          "groupby": ["group", "depth"],
           "ops": ["count"],
-          "as": ["count"]
-        }
-      ]
-    },
-    {
-      "name": "sorted",
-      "source": "counts",
-      "transform": [
-        {
-          "type": "collect",
-          "sort": {
-            "field": ["group", "reads"],
-            "order": ["ascending", "descending"]
-          }
-        }
-      ]
-    },
-    {
-      "name": "cumulative",
-      "source": "sorted",
-      "transform": [
-        {
-          "type": "window",
-          "groupby": ["group"],
-          "ops": ["sum"],
-          "fields": ["count"],
-          "as": ["samples_geq_reads"]
+          "as": ["sample_count"]
         }
       ]
     }
@@ -109,7 +87,7 @@
         "enter": {
           "x": {"value": 5},
           "y": {"value": 75},
-          "width": {"value": 700},
+          "width": {"value": 800},
           "height": {"value": 400}
         }
       },
@@ -203,7 +181,7 @@
         "enter": {
           "x": {"value": 5},
           "y": {"value": 550},
-          "width": {"value": 700},
+          "width": {"value": 800},
           "height": {"value": 400}
         }
       },
@@ -211,14 +189,14 @@
         {
           "name": "x2",
           "type": "linear",
-          "domain": {"data": "samples", "field": "reads"},
+          "domain": {"data": "raw_filtered", "field": "read_depth"},
           "nice": true,
           "range": "width"
         },
         {
           "name": "y2",
           "type": "linear",
-          "domain": {"data": "cumulative", "field": "samples_geq_reads"},
+          "domain": {"data": "samples_at_depth", "field": "sample_count"},
           "nice": true,
           "range": "height"
         }
@@ -232,19 +210,19 @@
           "type": "group",
           "from": {
             "facet": {
-              "name": "faceted",
-              "data": "cumulative",
+              "name": "faceted_lower",
+              "data": "samples_at_depth",
               "groupby": "group"
             }
           },
           "marks": [
             {
               "type": "line",
-              "from": {"data": "faceted"},
+              "from": {"data": "faceted_lower"},
               "encode": {
                 "update": {
-                  "x": {"scale": "x2", "field": "reads"},
-                  "y": {"scale": "y2", "field": "samples_geq_reads"},
+                  "x": {"scale": "x2", "field": "depth"},
+                  "y": {"scale": "y2", "field": "sample_count"},
                   "stroke": {"scale": "color", "field": "group"},
                   "strokeWidth": {"value": 1}
                 }
@@ -252,11 +230,11 @@
             },
             {
               "type": "symbol",
-              "from": {"data": "faceted"},
+              "from": {"data": "faceted_lower"},
               "encode": {
                 "update": {
-                  "x": {"scale": "x2", "field": "reads"},
-                  "y": {"scale": "y2", "field": "samples_geq_reads"},
+                  "x": {"scale": "x2", "field": "depth"},
+                  "y": {"scale": "y2", "field": "sample_count"},
                   "fill": {"scale": "color", "field": "group"},
                   "size": {"value": 20}
                 }

@@ -179,6 +179,7 @@ plugin.visualizers.register_function(
     parameters={'combined': Metadata,
                 'sorted_depths': List[Int],
                 'percent_samples_100': Float,
+                'steps': Int,
                 'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard', 'simpson', 'brillouin_d',
                                          'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit','dominance',
                                          'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d']),
@@ -201,6 +202,7 @@ plugin.visualizers.register_function(
     input_descriptions={},
     parameter_descriptions={
         'sorted_depths': 'A list of sorted depths as integers.',
+        'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth.',
         'max_read_percentile': 'The maximum read depth percentile used for linearly spacing the evaluated depths.',
         'percent_samples_100': 'The minimal percentage of samples you want to keep, between 0 and 100.',
         'reads_per_sample': 'A list of how many reads each sample has.',

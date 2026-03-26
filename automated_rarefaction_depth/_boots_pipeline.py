@@ -200,7 +200,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 """result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
                 artifacts_list.append(result)"""
 
-                #for testing
                 #function to use if we want to get the data for each iteration and sample instead of just the average
                 #and then combine it into a dataframe to use for the visualization and knee point calculation
                 sample_data, = alpha_collection_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False)
@@ -264,7 +263,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         kp_df.index = kp_df.index.astype(str)
         knee_point_list = qiime2.Metadata(kp_df)
         metrics = list(metrics)
-        visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass,
+        visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass, steps=steps,
                         sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm,
                         combined=combined, metadata_columns=metadata_columns, metadata=meta_data, rps=qiime2.Metadata(reads_per_sample_merged), kp_list=knee_point_list, metrics=metrics) 
 
@@ -401,7 +400,7 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
 
 # combined visualization function for alpha and beta metrics
 # to do: add some text somewhere if kmer was run?
-def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, calc_array: list[float] = None, algorithm: str = "kneedle", num_samples_left: list[int] = None, 
+def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, calc_array: list[float] = None, algorithm: str = "kneedle", num_samples_left: list[int] = None, steps: int = None, 
                   percent_samples_100: float = 0, reads_per_sample: list[int] = None, sorted_depths: list[int] = None, max_reads: int = 1, depth_threshold: int = 1, knee_point: int = 0, max_read_percentile: int = 1,# combined_df: pd.DataFrame = None, sample_names: list[str] = None,
                   metadata_columns: list[str] = None, combined: qiime2.Metadata = None, metadata: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None, metrics: list[str]=None)->None: #added metadata_columns, metadata and combined for the alpha visualization with metadata  
     
@@ -416,6 +415,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     graph_name = str(metric)
     beta = False
 
+    max_range = np.linspace(1, max_reads, num=steps, dtype=int)
+    max_range_list = [{"depth": int(depth)} for depth in max_range]
 
     # beta metric specific code
     if metric in ['braycurtis', 'jaccard']:
@@ -499,7 +500,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 signal["value"] = int(knee_point)
 
     else:
-        with open(os.path.join(TEMPLATES, "multiple_metrics_alpha_div.json")) as f:
+        with open(os.path.join(TEMPLATES, "mm_alpha_div.json")) as f:
+        #with open(os.path.join(TEMPLATES, "multiple_metrics_alpha_div.json")) as f:
             spec = json.load(f)
 
         for signal in spec["signals"]:
@@ -516,9 +518,16 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 combined = combined.drop('id', axis=1)
                 d["values"] = combined.to_dict(orient='records')
             if d["name"] == "samples":
+                depths_list = [int(d) for d in max_range]
                 rps.rename(columns={"sample-id": "sample"}, inplace=True)
                 rps = rps.set_index("sample").reset_index()
-                d["values"] = rps.to_dict(orient='records')
+                samples_records = rps.to_dict(orient='records')
+                for s in samples_records:
+                    s["all_depths"] = depths_list
+                d["values"] = samples_records
+                """rps.rename(columns={"sample-id": "sample"}, inplace=True)
+                rps = rps.set_index("sample").reset_index()
+                d["values"] = rps.to_dict(orient='records')"""
             if d["name"] == "knee_points":
                 d["values"] = kp_list
 
