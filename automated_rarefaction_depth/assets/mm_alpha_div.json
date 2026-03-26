@@ -1,6 +1,6 @@
 {
   "$schema": "https://vega.github.io/schema/vega/v5.json",
-  "width": 800,
+  "width": 900,
   "height": 400,
   "signals": [
     {
@@ -87,7 +87,7 @@
         "enter": {
           "x": {"value": 5},
           "y": {"value": 75},
-          "width": {"value": 800},
+          "width": {"value": 900},
           "height": {"value": 400}
         }
       },
@@ -181,7 +181,7 @@
         "enter": {
           "x": {"value": 5},
           "y": {"value": 550},
-          "width": {"value": 800},
+          "width": {"value": 900},
           "height": {"value": 400}
         }
       },

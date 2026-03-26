@@ -80,7 +80,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                    seed = _pipe_defaults['seed'], kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
                    min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm']):
     
-    alpha_action = ctx.get_action('boots', 'alpha')
+    #alpha_action = ctx.get_action('boots', 'alpha')
     beta_action = ctx.get_action('boots', 'beta')
     kmer_action = ctx.get_action('kmerizer', 'seqs_to_kmers')
     viz_combined_action = ctx.get_action('rarefaction-depth', '_combined_viz')
@@ -96,7 +96,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     #observed_features is always included
     metrics.add('observed_features') 
     print(metrics)
-    metric = list(metrics)[0] #for now just take the first metric in the set, will adjust later to do multiple metrics
+    metric = list(metrics)[0] #for now just take the first metric in the set, so I don't get errors from my beta code
     
     #run seqs_to_kmers if sequence is provided
     kmer_run = False
@@ -188,7 +188,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     
     else:
         #if alpha metric was chosen
-        #testing 
         dfs = []
         combined_dfs = []
         knee_point_list = []
@@ -221,17 +220,12 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 #making the mean_df which I would need for the knee point calculation
                 mean_df = (combined.groupby(['sample', 'read_depth'], as_index=False).agg(mean_observed=('observed', 'mean')))
             
-            """out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
-            os.makedirs(out_dir, exist_ok=True)
-            combined.to_json(
-                os.path.join(out_dir, f"iter_data.json"), orient="records", indent=2)"""
-            
             combined_dfs.append(combined)
             #calculatin knee point here as data formats are a bit different
             if metric in ['observed_features', 'shannon', 'simpson', 'brillouin_d', 'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit']:
                 curve_type = "concave"
                 direction = "increasing"
-            elif metric in ['dominance', 'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'lladser_pe', 'jaccard', 'braycurtis']:
+            elif metric in ['dominance', 'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'jaccard', 'braycurtis']:
                 curve_type = "convex"
                 direction = "decreasing"
             knee_points = [None] * len(sample_list)
@@ -416,7 +410,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     beta = False
 
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
-    max_range_list = [{"depth": int(depth)} for depth in max_range]
 
     # beta metric specific code
     if metric in ['braycurtis', 'jaccard']:
@@ -442,7 +435,7 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         kp_list = kp_list.drop('id', axis=1)
         kp_list = kp_list.to_dict(orient='records')
         sorted_depths = pd.Series(sorted_depths)
-        reads_per_sample = pd.DataFrame(reads_per_sample)
+        #reads_per_sample = pd.DataFrame(reads_per_sample)
 
         #finding +-5% points & at what percentile knee point is
         """index = np.searchsorted(sorted_depths, knee_point)
@@ -455,9 +448,9 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         upper_value = round(sorted_depths.iloc[upper_index])"""
 
         #is this still needed?
-        reads_per_sample_df = reads_per_sample.reset_index()
+        """reads_per_sample_df = reads_per_sample.reset_index()
         reads_per_sample_df.columns = ['sample', 'reads_per_sample']
-        reads_per_sample_df["sample"] = reads_per_sample_df["sample"].astype(str)
+        reads_per_sample_df["sample"] = reads_per_sample_df["sample"].astype(str)"""
         
         rps = rps.to_dataframe().reset_index()
    
