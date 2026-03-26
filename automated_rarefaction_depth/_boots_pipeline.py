@@ -248,22 +248,16 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             print(knee_point)
             knee_point_list.append((knee_point, metric))
 
-        print("knee point list:", knee_point_list)
+    
         combined_df = mean_df.pivot(index='sample', columns='read_depth', values='mean_observed').reset_index()
-        
         combined_df = combined_df.drop(combined_df.columns[-1], axis=1)
-
         combined_df.index = combined_df.index.astype(str)
     
         percent_samples_100 = round(percent_samples * 100, 2)
  
         combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
         combined = combined.set_index('id')
-        print("combined", combined.head())
-        print(combined.columns)
-        print("combined metrics:", combined.metric.unique())
-
-      
+       
         combined = qiime2.Metadata(combined)
         kp_df = pd.DataFrame(knee_point_list, columns=['knee', 'metric'])
         kp_df.index.name = 'id'
@@ -445,9 +439,7 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         line_chart_df = combined.to_dataframe().reset_index()
         kp_list = kp_list.to_dataframe().reset_index()
         kp_list = kp_list.drop('id', axis=1)
-        print("kp_list df:", kp_list, kp_list.shape)
         kp_list = kp_list.to_dict(orient='records')
-        print("kp_list:", kp_list)
         sorted_depths = pd.Series(sorted_depths)
         reads_per_sample = pd.DataFrame(reads_per_sample)
 
@@ -467,35 +459,18 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         reads_per_sample_df["sample"] = reads_per_sample_df["sample"].astype(str)
         
         rps = rps.to_dataframe().reset_index()
-
-        # Read the JSON file back into a DataFrame
-        """out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
-        os.makedirs(out_dir, exist_ok=True)
-        reads_per_sample_merged = pd.read_json(os.path.join(out_dir, "reads_per_sample_merged.json"), orient="records")
-        print("reads per sample merged df:")
-        print(reads_per_sample_merged.head())"""
    
     # specify names and titles according to what was run
     if kmer_run:
-        #title_x = 'Total Kmer Count'
-        #title_y = '# Observed Distinct Kmers'
         graph_data = "number of observed kmers"
         graph_name = "Kmers"
-        #barplot_title = 'Kmers per Sample'
-        #property_title = 'Histogram of Kmers per Sample'
     else:
-        #title_x = 'Read Depth'
-        #title_y = '# Observed Features'
         graph_data = "number of observed features"
         graph_name = "Reads"
-        #barplot_title = 'Reads per Sample'
-        #property_title = 'Histogram of Reads per Sample'
 
     if metric == 'shannon':
-        #title_y = 'Shannon Index'
         graph_data = "Shannon Index"
     if beta:
-        #title_y = 'Distance'
         graph_data = "Distance"
 
     #make 2 plots a 1 line plot, 1 barplot  
@@ -524,18 +499,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 signal["value"] = int(knee_point)
 
     else:
-        #trying to make it look like the alpha diversity plot        
-        #saving testing data
-        """out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
-        os.makedirs(out_dir, exist_ok=True)
-        combined.to_dataframe().to_json(
-            os.path.join(out_dir, "combined_alpha.json"), orient="records", indent=2)"""
-        
-        
-        # concatenated alpha-div plot
-        #with open(os.path.join(TEMPLATES, "alpha-div-concatenated-no-data.json")) as f:
-        #    spec = json.load(f)
-
         with open(os.path.join(TEMPLATES, "multiple_metrics_alpha_div.json")) as f:
             spec = json.load(f)
 
@@ -550,15 +513,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         for d in spec["data"]:
             if d["name"] == "raw":
                 combined = combined.to_dataframe().reset_index()
-                print("combined before dropping id:", combined.head(), combined.columns)
                 combined = combined.drop('id', axis=1)
-                print("combined for alpha-div plot:", combined.head(), combined.metric.unique(), combined.columns)
                 d["values"] = combined.to_dict(orient='records')
-                """out_dir = "/home/andrea/automated-rarefaction-depth/data-json-files"
-                os.makedirs(out_dir, exist_ok=True)
-                combined.to_json(os.path.join(out_dir, "combined_w_metric2.json"), orient="records", indent=2)"""
-
-        for d in spec["data"]:
             if d["name"] == "samples":
                 rps.rename(columns={"sample-id": "sample"}, inplace=True)
                 rps = rps.set_index("sample").reset_index()
@@ -566,17 +522,11 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
             if d["name"] == "knee_points":
                 d["values"] = kp_list
 
-        
     
     vega_json = json.dumps(spec)
-
-    """out_dir = "/home/andrea/automated-rarefaction-depth"
-    os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, "mm-populated.json"), 'w') as f:
-        json.dump(spec, f, indent=2)"""
     
-    if (knee_point > depth_threshold) and (not beta):
-        add_text = True
+    """if (knee_point > depth_threshold) and (not beta):
+        add_text = True"""
 
     tabbed_context = {
         "vega_json": vega_json,

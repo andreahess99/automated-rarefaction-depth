@@ -69,7 +69,7 @@ plugin.pipelines.register_function(
                 'seed': Int % Range(1, None),
                 'metrics': Set[Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard', 'simpson', 'brillouin_d', 
                                          'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit','dominance',
-                                         'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'lladser_pe' ])], #added more alpha-metric choices
+                                         'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d'])], #added more alpha-metric choices
                 'kmer_size': Int,
                 'tfidf': Bool,
                 'max_df': Float % Range(0, 1, inclusive_start=True,
@@ -181,7 +181,7 @@ plugin.visualizers.register_function(
                 'percent_samples_100': Float,
                 'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard', 'simpson', 'brillouin_d',
                                          'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit','dominance',
-                                         'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'lladser_pe']),
+                                         'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d']),
                 'max_reads': Int % Range(1, None),
                 'max_read_percentile': Int % Range(1, 100),
                 'depth_threshold': Int % Range(1, None),
