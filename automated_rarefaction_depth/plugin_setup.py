@@ -69,7 +69,7 @@ plugin.pipelines.register_function(
                 'seed': Int % Range(1, None),
                 'metrics': Set[Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard', 'simpson', 'brillouin_d', 
                                          'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit','dominance',
-                                         'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d'])], #added more alpha-metric choices
+                                         'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d','unweighted_unifrac', 'weighted_unifrac', 'hamming', 'dice'])], #added more alpha and beta metric choices
                 'kmer_size': Int,
                 'tfidf': Bool,
                 'max_df': Float % Range(0, 1, inclusive_start=True,
@@ -182,7 +182,8 @@ plugin.visualizers.register_function(
                 'steps': Int,
                 'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard', 'simpson', 'brillouin_d',
                                          'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit','dominance',
-                                         'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d']),
+                                         'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d',
+                                         'unweighted_unifrac', 'weighted_unifrac', 'hamming', 'dice']), #added some beta metrics
                 'max_reads': Int % Range(1, None),
                 'max_read_percentile': Int % Range(1, 100),
                 'depth_threshold': Int % Range(1, None),
@@ -192,12 +193,15 @@ plugin.visualizers.register_function(
                 'max_range': List[Float],
                 'algorithm': Str % Choices(['kneedle', 'gradient']),
                 'calc_array': List[Float],
-                'num_samples_left': List[Int],
+                'num_samples': Metadata,
                 'metadata_columns': List[Str],
                 'metadata': Metadata,
                 'rps': Metadata,
-                'metrics': List[Str],
-                'kp_list': Metadata
+                'alpha_metrics': List[Str],
+                'kp_list': Metadata,
+                'data_beta': Metadata,
+                'kp_list_beta': Metadata,
+                'beta_metrics': List[Str]
                 },
     input_descriptions={},
     parameter_descriptions={
@@ -214,7 +218,7 @@ plugin.visualizers.register_function(
         'algorithm': "The algorithm which was chosen for the knee point calculation, kneedle or gradient",
         'max_range': 'The different read depths at which the distance matrix was calculated.',
         'calc_array': 'The array of the calculated points.',
-        'num_samples_left': "This array contains how many samples are considered at the considered read depths.",
+        'num_samples': "The metadata containing the number of samples at each read depth.",
         'metadata_columns': "The metadata columns that are present in the combined feature table.",
     },
     name='Automated Rarefaction Depth',

@@ -16,6 +16,10 @@
     {
       "name": "knee_point",
       "update": "length(data('selected_knee')) > 0 ? data('selected_knee')[0].knee : null"
+    },
+    {
+      "name": "x_axis_title",
+      "value": "Sequencing Depth" 
     }
   ],
   "data": [
@@ -106,7 +110,7 @@
         }
       ],
       "axes": [
-        {"scale": "x1", "orient": "bottom", "title": "Sequencing Depth"},
+        {"scale": "x1", "orient": "bottom", "title": {"signal": "x_axis_title"}},
         {"scale": "y1", "orient": "left", "title": {"signal": "metricField"}}
       ],
       "marks": [

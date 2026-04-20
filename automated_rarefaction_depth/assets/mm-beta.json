@@ -1,0 +1,241 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "width": 900,
+  "height": 400,
+  "signals": [
+    {
+      "name": "metricField",
+      "value": "braycurtis",
+      "bind": {"input": "select", "options": ["braycurtis"], "name": "Metric: "}
+    },
+    {
+      "name": "knee_point",
+      "update": "length(data('selected_knee')) > 0 ? data('selected_knee')[0].knee : null"
+    },
+    {"name": "x_axis_title", "value": "Sequencing Depth"}
+  ],
+  "data": [
+    {
+      "name": "raw",
+      "values": [
+        {
+          "depth": 253.5,
+          "observed_features": 0.0041489732,
+          "metric": "braycurtis"
+        },
+        {
+          "depth": 422,
+          "observed_features": 0.002599815,
+          "metric": "braycurtis"
+        },
+        {
+          "depth": 590.5,
+          "observed_features": 0.0019254918,
+          "metric": "braycurtis"
+        },
+        {
+          "depth": 759.5,
+          "observed_features": 0.0014537033,
+          "metric": "braycurtis"
+        },
+        {
+          "depth": 928,
+          "observed_features": 0.0012717143,
+          "metric": "braycurtis"
+        },
+        {
+          "depth": 1096.5,
+          "observed_features": 0.0010236505,
+          "metric": "braycurtis"
+        },
+        {
+          "depth": 1265.5,
+          "observed_features": 0.0008789114,
+          "metric": "braycurtis"
+        },
+        {
+          "depth": 1434,
+          "observed_features": 0.0007878112,
+          "metric": "braycurtis"
+        },
+        {
+          "depth": 1602.5,
+          "observed_features": 0.0007384926,
+          "metric": "braycurtis"
+        },
+        {
+          "depth": 1771.5,
+          "observed_features": 0.0003440994,
+          "metric": "braycurtis"
+        }
+      ]
+    },
+    {
+      "name": "raw_filtered",
+      "source": "raw",
+      "transform": [
+        {
+          "type": "filter",
+          "expr": "metricField && datum.metric === metricField"
+        }
+      ]
+    },
+    {"name": "knee_points", "values": [{"knee": 200, "metric": "braycurtis"}]},
+    {
+      "name": "selected_knee",
+      "source": "knee_points",
+      "transform": [{"type": "filter", "expr": "datum.metric === metricField"}]
+    },
+    {
+      "name": "samples",
+      "values": [
+        {"depth": 253.5, "num_samples_left": 51},
+        {"depth": 422, "num_samples_left": 49},
+        {"depth": 590.5, "num_samples_left": 47},
+        {"depth": 759.5, "num_samples_left": 42},
+        {"depth": 928, "num_samples_left": 34},
+        {"depth": 1096.5, "num_samples_left": 26},
+        {"depth": 1265.5, "num_samples_left": 19},
+        {"depth": 1434, "num_samples_left": 13},
+        {"depth": 1602.5, "num_samples_left": 9},
+        {"depth": 1771.5, "num_samples_left": 6}
+      ]
+    }
+  ],
+  "scales": [],
+  "marks": [
+    {
+      "type": "group",
+      "name": "upper_plot",
+      "encode": {
+        "enter": {
+          "x": {"value": 5},
+          "y": {"value": 50},
+          "width": {"value": 900},
+          "height": {"value": 400}
+        }
+      },
+      "scales": [
+        {
+          "name": "x1",
+          "type": "linear",
+          "domain": {"data": "raw_filtered", "field": "depth"},
+          "range": "width",
+          "nice": true
+        },
+        {
+          "name": "y1",
+          "type": "linear",
+          "domain": {"data": "raw_filtered", "field": "observed"},
+          "range": "height",
+          "nice": true
+        }
+      ],
+      "axes": [
+        {
+          "scale": "x1",
+          "orient": "bottom",
+          "title": {"signal": "x_axis_title"}
+        },
+        {"scale": "y1", "orient": "left", "title": {"signal": "metricField"}}
+      ],
+      "marks": [
+        {
+          "type": "line",
+          "from": {"data": "raw_filtered"},
+          "encode": {
+            "update": {
+              "x": {"scale": "x1", "field": "depth"},
+              "y": {"scale": "y1", "field": "observed"},
+              "stroke": {"value": "steelblue"},
+              "strokeWidth": {"value": 2}
+            }
+          }
+        },
+        {
+          "type": "symbol",
+          "from": {"data": "raw_filtered"},
+          "encode": {
+            "update": {
+              "x": {"scale": "x1", "field": "depth"},
+              "y": {"scale": "y1", "field": "observed"},
+              "fill": {"value": "steelblue"},
+              "size": {"value": 30}
+            }
+          }
+        },
+        {
+          "type": "rule",
+          "encode": {
+            "enter": {
+              "y": {"value": 0},
+              "y2": {"signal": "height"},
+              "stroke": {"value": "red"},
+              "strokeWidth": {"value": 2}
+            },
+            "update": {"x": {"scale": "x1", "signal": "knee_point"}}
+          }
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "lower_plot",
+      "encode": {
+        "enter": {
+          "x": {"value": 5},
+          "y": {"value": 525},
+          "width": {"value": 900},
+          "height": {"value": 400}
+        }
+      },
+      "scales": [
+        {
+          "name": "x2",
+          "type": "linear",
+          "domain": {"data": "samples", "field": "depth"},
+          "nice": true,
+          "range": "width"
+        },
+        {
+          "name": "y2",
+          "type": "linear",
+          "domain": {"data": "samples", "field": "num_samples_left"},
+          "nice": true,
+          "range": "height"
+        }
+      ],
+      "axes": [
+        {"scale": "x2", "orient": "bottom", "title": "Read Depth"},
+        {"scale": "y2", "orient": "left", "title": "Number of Samples"}
+      ],
+      "marks": [
+        {
+          "type": "line",
+          "from": {"data": "samples"},
+          "encode": {
+            "update": {
+              "x": {"scale": "x2", "field": "depth"},
+              "y": {"scale": "y2", "field": "num_samples_left"},
+              "stroke": {"value": "steelblue"},
+              "strokeWidth": {"value": 2}
+            }
+          }
+        },
+        {
+          "type": "symbol",
+          "from": {"data": "samples"},
+          "encode": {
+            "update": {
+              "x": {"scale": "x2", "field": "depth"},
+              "y": {"scale": "y2", "field": "num_samples_left"},
+              "fill": {"value": "steelblue"},
+              "size": {"value": 30}
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "config": {}
+}

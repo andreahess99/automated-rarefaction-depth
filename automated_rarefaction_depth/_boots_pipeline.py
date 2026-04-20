@@ -12,14 +12,14 @@ import numpy as np
 import pandas as pd
 import qiime2
 import q2templates
-from qiime2 import Artifact
+#from qiime2 import Artifact
 from kneed import KneeLocator
 import altair as alt
 from shutil import copytree
 import warnings
 from skbio import DistanceMatrix
-import time
-import matplotlib.pyplot as plt
+#import time
+#import matplotlib.pyplot as plt
 
 
 """def altair_theme():
@@ -87,14 +87,24 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     alpha_collection_action = ctx.get_action("boots", "alpha_collection")
 
     table_df = table.view(pd.DataFrame)
+    alpha = False
+    beta = False
+    #observed_features and braycurtis are always included
+    metrics.add('observed_features').add('braycurtis')
 
-    beta = False #adjust once I actually also do beta metrics again
+    if any(m in ['braycurtis', 'jaccard'] for m in metrics):
+        beta = True
+        metrics_beta = [m for m in metrics if m in ['braycurtis', 'jaccard', 'unweighted_unifrac', 'weighted_unifrac', 'hamming', 'dice']]
+        
+    if any(m not in ['braycurtis', 'jaccard'] for m in metrics):
+        #alpha = True #commented out for testing mm-beta
+        metrics_alpha = [m for m in metrics if m not in ['braycurtis', 'jaccard']]
+        
 
     meta = meta_data.to_dataframe()
     meta.index.name = "sample"
     metadata_columns = ["sample"] + meta.columns.tolist()
-    #observed_features is always included
-    metrics.add('observed_features') 
+    
     print(metrics)
     metric = list(metrics)[0] #for now just take the first metric in the set, so I don't get errors from my beta code
     
@@ -146,47 +156,82 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
 
     # beta metric specific code
     if beta:
-        num_samples_left = [None] * (steps)
-        avg_difference = [None] * (steps-1)
-        median_difference = [None] * (steps-1)
-        std_difference = [None] * (steps-1)
-        p75_25_difference = [None] * (steps-1)
-        avg_range = [None] * (steps-1)
-        for i in range(steps):
-            print(f"step {i+1}: {max_range[i]}")
-            beta_result, = beta_action(table=table, sampling_depth=(int(max_range[i])), metric=metric, n=iterations, replacement=False)
-            num_samples_left[i] = beta_result.view(DistanceMatrix).shape[0]
+        knee_points_beta = []
+        data_beta = []
+        for k, metric in enumerate(metrics_beta):
+            print("metric:", metric)
+            num_samples_left = [None] * (steps)
+            avg_difference = [None] * (steps-1)
+            median_difference = [None] * (steps-1)
+            std_difference = [None] * (steps-1)
+            p75_25_difference = [None] * (steps-1)
+            avg_range = [None] * (steps-1)
+            for i in range(steps):
+                print(f"step {i+1}: {max_range[i]}")
+                beta_result, = beta_action(table=table, sampling_depth=(int(max_range[i])), metric=metric, n=iterations, replacement=False)
+                if k == 0:
+                    num_samples_left[i] = beta_result.view(DistanceMatrix).shape[0] 
 
-            if i > 0:
-                # reduce old_beta_result to only the ids present in the current beta_result
-                old_dm_full = old_beta_result.view(DistanceMatrix)
-                new_ids = list(beta_result.view(DistanceMatrix).ids)
-                common_ids = [sid for sid in old_dm_full.ids if sid in new_ids]
+                if i > 0:
+                    # reduce old_beta_result to only the ids present in the current beta_result
+                    old_dm_full = old_beta_result.view(DistanceMatrix)
+                    new_ids = list(beta_result.view(DistanceMatrix).ids)
+                    common_ids = [sid for sid in old_dm_full.ids if sid in new_ids]
 
-                if common_ids:
-                    idxs = [old_dm_full.ids.index(sid) for sid in common_ids]
-                    subdata = old_dm_full.data[np.ix_(idxs, idxs)]
-                    old_dm = DistanceMatrix(subdata, ids=common_ids)
-            
-                new_dm = beta_result.view(DistanceMatrix)
-                difference = np.abs(new_dm.data - old_dm.data)
+                    if common_ids:
+                        idxs = [old_dm_full.ids.index(sid) for sid in common_ids]
+                        subdata = old_dm_full.data[np.ix_(idxs, idxs)]
+                        old_dm = DistanceMatrix(subdata, ids=common_ids)
                 
-                avg_difference[i-1] = np.mean(difference[np.triu_indices_from(difference, k=1)])
-                median_difference[i-1] = np.median(difference[np.triu_indices_from(difference, k=1)])
-                std_difference[i-1] = np.std(difference[np.triu_indices_from(difference, k=1)])
-                p75_25_difference[i-1] = np.percentile(difference[np.triu_indices_from(difference, k=1)], 75) - np.percentile(difference[np.triu_indices_from(difference, k=1)], 25)
+                    new_dm = beta_result.view(DistanceMatrix)
+                    difference = np.abs(new_dm.data - old_dm.data)
+                    
+                    avg_difference[i-1] = np.mean(difference[np.triu_indices_from(difference, k=1)])
+                    median_difference[i-1] = np.median(difference[np.triu_indices_from(difference, k=1)])
+                    std_difference[i-1] = np.std(difference[np.triu_indices_from(difference, k=1)])
+                    p75_25_difference[i-1] = np.percentile(difference[np.triu_indices_from(difference, k=1)], 75) - np.percentile(difference[np.triu_indices_from(difference, k=1)], 25)
 
-                avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
-            
-            old_beta_result = beta_result
+                    avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
+                
+                old_beta_result = beta_result
 
-        clean_max_range = [float(x) for x in max_range]
-        clean_avg_diff = [float(x) if x is not None else 0.0 for x in avg_difference]
-        clean_samples_left = [int(x) for x in num_samples_left]
-        # combined visualization function call
-        visualization, = viz_combined_action(max_range=clean_max_range, kmer_run=kmer_run, calc_array=clean_avg_diff, metric=metric, algorithm=algorithm, num_samples_left=clean_samples_left)
+            clean_max_range = [float(x) for x in max_range]
+            clean_avg_diff = [float(x) if x is not None else 0.0 for x in avg_difference]
+            data_beta.append(pd.DataFrame({'metric': metric, 'depth': avg_range[1:], 'observed': clean_avg_diff[1:]}))
+            if k==0:
+                clean_samples_left = [int(x) for x in num_samples_left]
+                df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
+            kpb = knee_point_locator(avg_range[1:], clean_avg_diff[1:], algorithm, "convex", "decreasing")
+            print("knee point for metric", metric, ":", kpb)
+            kpb = round(float(kpb)) if kpb is not None else 0
+            knee_points_beta.append(pd.DataFrame({'knee': kpb, 'metric': metric}, index=[0]))
+            print("knee_points_beta:", knee_points_beta)
+
+
+        #data_beta = pd.DataFrame(data_beta[0])
+        data_beta = pd.concat(data_beta, ignore_index=True)
+        data_beta.columns = ['metric', 'depth', 'observed']
+        data_beta.insert(0, 'id', [f"row{i}" for i in range(len(data_beta))])
+        
+        data_beta = data_beta.set_index('id')
+        data_beta = qiime2.Metadata(data_beta)
+
+        #kp_beta = pd.DataFrame(knee_points_beta[0])
+        kp_beta = pd.concat(knee_points_beta, ignore_index=True)
+        kp_beta.columns = ['knee', 'metric']
+        kp_beta.insert(0, 'id', [f"row{i}" for i in range(len(kp_beta))])
+        #kp_beta = pd.DataFrame(knee_points_beta, columns=['knee', 'metric'])
+        kp_beta = kp_beta.set_index('id')
+        kp_beta.index = kp_beta.index.astype(str)
+        kp_list_beta = qiime2.Metadata(kp_beta)
+        df_bars.insert(0, 'id', [f"row{i}" for i in range(len(df_bars))])
+        df_bars = df_bars.set_index('id')
+        num_samples = qiime2.Metadata(df_bars)
+        #visualization, = viz_combined_action(max_range=clean_max_range, kmer_run=kmer_run, calc_array=clean_avg_diff, metric=metric, algorithm=algorithm, num_samples_left=clean_samples_left)
+        visualization, = viz_combined_action(max_range=clean_max_range, kmer_run=kmer_run, metric=metric, algorithm=algorithm, num_samples=num_samples, data_beta=data_beta, kp_list_beta=kp_list_beta, beta_metrics=metrics_beta)
+        
     
-    else:
+    if alpha:
         #if alpha metric was chosen
         dfs = []
         combined_dfs = []
@@ -252,14 +297,17 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         combined = combined.set_index('id')
        
         combined = qiime2.Metadata(combined)
+        
         kp_df = pd.DataFrame(knee_point_list, columns=['knee', 'metric'])
         kp_df.index.name = 'id'
         kp_df.index = kp_df.index.astype(str)
         knee_point_list = qiime2.Metadata(kp_df)
         metrics = list(metrics)
+        
         visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, reads_per_sample=reads_per_sample_pass, steps=steps,
                         sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, algorithm=algorithm,
-                        combined=combined, metadata_columns=metadata_columns, metadata=meta_data, rps=qiime2.Metadata(reads_per_sample_merged), kp_list=knee_point_list, metrics=metrics) 
+                        combined=combined, metadata_columns=metadata_columns, metadata=meta_data, rps=qiime2.Metadata(reads_per_sample_merged), kp_list=knee_point_list, metrics=metrics,
+                        kp_list_beta=kp_list_beta, data_beta=data_beta, alpha_metrics=metrics_alpha, beta_metrics=metrics_beta, num_samples=num_samples) 
 
     return visualization
 
@@ -394,9 +442,10 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
 
 # combined visualization function for alpha and beta metrics
 # to do: add some text somewhere if kmer was run?
-def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, calc_array: list[float] = None, algorithm: str = "kneedle", num_samples_left: list[int] = None, steps: int = None, 
+def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, calc_array: list[float] = None, algorithm: str = "kneedle", num_samples: qiime2.Metadata = None, steps: int = None, 
                   percent_samples_100: float = 0, reads_per_sample: list[int] = None, sorted_depths: list[int] = None, max_reads: int = 1, depth_threshold: int = 1, knee_point: int = 0, max_read_percentile: int = 1,# combined_df: pd.DataFrame = None, sample_names: list[str] = None,
-                  metadata_columns: list[str] = None, combined: qiime2.Metadata = None, metadata: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None, metrics: list[str]=None)->None: #added metadata_columns, metadata and combined for the alpha visualization with metadata  
+                  metadata_columns: list[str] = None, combined: qiime2.Metadata = None, metadata: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None,
+                  kp_list_beta: qiime2.Metadata = None, data_beta: qiime2.Metadata = None, alpha_metrics: list[str] = None, beta_metrics: list[str] = None)->None: #added metadata_columns, metadata and combined for the alpha visualization with metadata  
     
     #default values for the tabbed_context
     add_text = False
@@ -409,27 +458,23 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     graph_name = str(metric)
     beta = False
 
-    max_range = np.linspace(1, max_reads, num=steps, dtype=int)
 
     # beta metric specific code
-    if metric in ['braycurtis', 'jaccard']:
+    if beta_metrics is not None and len(beta_metrics) > 0:
         beta = True
         #line_plot_title = 'Beta Rarefaction Curve'
-        avg_range = [None] * (len(max_range)-1)
-        for i in range(1, len(max_range)):
-            avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
 
-        line_chart_df = pd.DataFrame({'depth': avg_range[1:], 'observed_features': calc_array[1:]})
+        line_chart_df = data_beta.to_dataframe().reset_index()
+        line_chart_df = line_chart_df.drop('id', axis=1)
+        kp_list_beta = kp_list_beta.to_dataframe().reset_index()
+        kp_list_beta = kp_list_beta.drop('id', axis=1)
+        kp_list_beta = kp_list_beta.to_dict(orient='records')
+        df_bars = num_samples.to_dataframe().reset_index()
+        df_bars = df_bars.drop('id', axis=1)
 
-        #calculate knee  point
-        knee_point = knee_point_locator(avg_range[1:], calc_array[1:], algorithm, "convex", "decreasing")
-        if knee_point is None:
-            knee_point = 0
-        else:
-            knee_point = round(float(knee_point))
 
     #alpha metric specific code
-    else:
+    if alpha_metrics is not None and len(alpha_metrics) > 0:
         line_chart_df = combined.to_dataframe().reset_index()
         kp_list = kp_list.to_dataframe().reset_index()
         kp_list = kp_list.drop('id', axis=1)
@@ -458,12 +503,12 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     if kmer_run:
         graph_data = "number of observed kmers"
         graph_name = "Kmers"
+        x_title = 'Sequencing Depth [Kmers]'
     else:
         graph_data = "number of observed features"
         graph_name = "Reads"
+        x_title = 'Sequencing Depth [Reads]'
 
-    if metric == 'shannon':
-        graph_data = "Shannon Index"
     if beta:
         graph_data = "Distance"
 
@@ -476,8 +521,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     #trying to dynamically populate my vega plot
     if beta:
         #df_bars = pd.DataFrame({'depth': max_range, 'num_samples_left': num_samples_left})
-        df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
-        with open(os.path.join(TEMPLATES, "beta_complete_viz.json")) as f:
+        #df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
+        """with open(os.path.join(TEMPLATES, "beta_complete_viz.json")) as f:
             spec = json.load(f)
 
         for d in spec["data"]:
@@ -490,7 +535,22 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         
         for signal in spec.get("signals", []):
             if signal["name"] == "inject_1":
-                signal["value"] = int(knee_point)
+                signal["value"] = int(knee_point)"""
+
+        #new mm plot
+        with open(os.path.join(TEMPLATES, "mm-beta.json")) as f:
+            spec = json.load(f)
+        for d in spec["data"]:
+            if d["name"] == "raw":
+                d["values"] = line_chart_df.to_dict(orient='records') #??
+            if d["name"] == "samples":
+                d["values"] = df_bars.to_dict(orient='records') # ??
+            if d["name"] == "knee_points":
+                d["values"] = kp_list_beta
+        
+        for signal in spec["signals"]:
+            if signal["name"] == "metricField":
+                signal["bind"]["options"] = beta_metrics
 
     else:
         with open(os.path.join(TEMPLATES, "mm_alpha_div.json")) as f:
@@ -503,7 +563,9 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
             #if signal["name"] == "knee_point":
             #    signal["value"] = int(knee_point)
             if signal["name"] == "metricField":
-                signal["bind"]["options"] = metrics
+                signal["bind"]["options"] = alpha_metrics
+            if signal["name"] == "x_axis_title":
+                signal["value"] = x_title
 
         for d in spec["data"]:
             if d["name"] == "raw":
@@ -511,6 +573,7 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 combined = combined.drop('id', axis=1)
                 d["values"] = combined.to_dict(orient='records')
             if d["name"] == "samples":
+                max_range = np.linspace(1, max_reads, num=steps, dtype=int)
                 depths_list = [int(d) for d in max_range]
                 rps.rename(columns={"sample-id": "sample"}, inplace=True)
                 rps = rps.set_index("sample").reset_index()
