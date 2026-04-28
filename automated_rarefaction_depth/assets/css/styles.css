@@ -144,4 +144,42 @@ form.vega-bindings {
   z-index: 9999;
 }
 
+/* style for tabs */
+/* Custom Navigation Bar */
+.custom-nav {
+    margin-top: 15px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e7e7e7;
+}
+
+.custom-nav ul {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    margin: 0;
+}
+
+.custom-nav li a {
+    display: block;
+    padding: 10px 20px;
+    text-decoration: none;
+    font-weight: 500;
+    color: #555 !important; /* Inactive tab: Black/Grey */
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s ease;
+}
+
+/* Hover state for inactive tabs */
+.custom-nav li a:hover {
+    background-color: #f8f9fa;
+    color: #0056b3 !important;
+}
+
+/* Active tab state */
+.custom-nav li.active a {
+    color: #007bff !important; /* Active tab: Blue */
+    font-weight: bold;
+    border-bottom: 3px solid #007bff; /* Blue underline */
+}
+
 
