@@ -1,5 +1,6 @@
 {
   "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "autosize": {"type": "fit-x", "contains": "padding"},
   "width": 900,
   "height": 400,
   "signals": [
@@ -15,69 +16,12 @@
     {"name": "x_axis_title", "value": "Sequencing Depth"}
   ],
   "data": [
-    {
-      "name": "raw",
-      "values": [
-        {
-          "depth": 253.5,
-          "observed_features": 0.0041489732,
-          "metric": "braycurtis"
-        },
-        {
-          "depth": 422,
-          "observed_features": 0.002599815,
-          "metric": "braycurtis"
-        },
-        {
-          "depth": 590.5,
-          "observed_features": 0.0019254918,
-          "metric": "braycurtis"
-        },
-        {
-          "depth": 759.5,
-          "observed_features": 0.0014537033,
-          "metric": "braycurtis"
-        },
-        {
-          "depth": 928,
-          "observed_features": 0.0012717143,
-          "metric": "braycurtis"
-        },
-        {
-          "depth": 1096.5,
-          "observed_features": 0.0010236505,
-          "metric": "braycurtis"
-        },
-        {
-          "depth": 1265.5,
-          "observed_features": 0.0008789114,
-          "metric": "braycurtis"
-        },
-        {
-          "depth": 1434,
-          "observed_features": 0.0007878112,
-          "metric": "braycurtis"
-        },
-        {
-          "depth": 1602.5,
-          "observed_features": 0.0007384926,
-          "metric": "braycurtis"
-        },
-        {
-          "depth": 1771.5,
-          "observed_features": 0.0003440994,
-          "metric": "braycurtis"
-        }
-      ]
-    },
+    {"name": "raw", "values": []},
     {
       "name": "raw_filtered",
       "source": "raw",
       "transform": [
-        {
-          "type": "filter",
-          "expr": "metricField && datum.metric === metricField"
-        }
+        {"type": "filter", "expr": "metricField && datum.metric === metricField"}
       ]
     },
     {"name": "knee_points", "values": [{"knee": 200, "metric": "braycurtis"}]},
@@ -86,21 +30,7 @@
       "source": "knee_points",
       "transform": [{"type": "filter", "expr": "datum.metric === metricField"}]
     },
-    {
-      "name": "samples",
-      "values": [
-        {"depth": 253.5, "num_samples_left": 51},
-        {"depth": 422, "num_samples_left": 49},
-        {"depth": 590.5, "num_samples_left": 47},
-        {"depth": 759.5, "num_samples_left": 42},
-        {"depth": 928, "num_samples_left": 34},
-        {"depth": 1096.5, "num_samples_left": 26},
-        {"depth": 1265.5, "num_samples_left": 19},
-        {"depth": 1434, "num_samples_left": 13},
-        {"depth": 1602.5, "num_samples_left": 9},
-        {"depth": 1771.5, "num_samples_left": 6}
-      ]
-    }
+    {"name": "samples", "values": []}
   ],
   "scales": [],
   "marks": [
@@ -111,8 +41,10 @@
         "enter": {
           "x": {"value": 5},
           "y": {"value": 50},
-          "width": {"value": 900},
           "height": {"value": 400}
+        },
+        "update": {
+          "width": {"signal": "width"}
         }
       },
       "scales": [
@@ -132,11 +64,7 @@
         }
       ],
       "axes": [
-        {
-          "scale": "x1",
-          "orient": "bottom",
-          "title": {"signal": "x_axis_title"}
-        },
+        {"scale": "x1", "orient": "bottom", "title": {"signal": "x_axis_title"}},
         {"scale": "y1", "orient": "left", "title": {"signal": "metricField"}}
       ],
       "marks": [
@@ -185,8 +113,10 @@
         "enter": {
           "x": {"value": 5},
           "y": {"value": 525},
-          "width": {"value": 900},
           "height": {"value": 400}
+        },
+        "update": {
+          "width": {"signal": "width"}
         }
       },
       "scales": [
@@ -237,5 +167,17 @@
       ]
     }
   ],
-  "config": {}
+  "config": {
+    "axis": {
+      "titleFontSize": 16,
+      "labelFontSize": 14,
+      "domainWidth": 2,
+      "tickWidth": 2,
+      "titlePadding": 10
+    },
+    "legend": {
+      "titleFontSize": 16,
+      "labelFontSize": 14
+    }
+  }
 }

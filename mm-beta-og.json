@@ -1,0 +1,191 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "width": 900,
+  "height": 400,
+  "signals": [
+    {
+      "name": "metricField",
+      "value": "braycurtis",
+      "bind": {"input": "select", "options": ["braycurtis"], "name": "Metric: "}
+    },
+    {
+      "name": "knee_point",
+      "update": "length(data('selected_knee')) > 0 ? data('selected_knee')[0].knee : null"
+    },
+    {"name": "x_axis_title", "value": "Sequencing Depth"}
+  ],
+  "data": [
+    {
+      "name": "raw",
+      "values": [ ]
+    },
+    {
+      "name": "raw_filtered",
+      "source": "raw",
+      "transform": [
+        {
+          "type": "filter",
+          "expr": "metricField && datum.metric === metricField"
+        }
+      ]
+    },
+    {"name": "knee_points", "values": [{"knee": 200, "metric": "braycurtis"}]},
+    {
+      "name": "selected_knee",
+      "source": "knee_points",
+      "transform": [{"type": "filter", "expr": "datum.metric === metricField"}]
+    },
+    {
+      "name": "samples",
+      "values": [ ]
+    }
+  ],
+  "scales": [],
+  "marks": [
+    {
+      "type": "group",
+      "name": "upper_plot",
+      "encode": {
+        "enter": {
+          "x": {"value": 5},
+          "y": {"value": 50},
+          "width": {"value": 900},
+          "height": {"value": 400}
+        }
+      },
+      "scales": [
+        {
+          "name": "x1",
+          "type": "linear",
+          "domain": {"data": "raw_filtered", "field": "depth"},
+          "range": "width",
+          "nice": true
+        },
+        {
+          "name": "y1",
+          "type": "linear",
+          "domain": {"data": "raw_filtered", "field": "observed"},
+          "range": "height",
+          "nice": true
+        }
+      ],
+      "axes": [
+        {
+          "scale": "x1",
+          "orient": "bottom",
+          "title": {"signal": "x_axis_title"}
+        },
+        {"scale": "y1", "orient": "left", "title": {"signal": "metricField"}}
+      ],
+      "marks": [
+        {
+          "type": "line",
+          "from": {"data": "raw_filtered"},
+          "encode": {
+            "update": {
+              "x": {"scale": "x1", "field": "depth"},
+              "y": {"scale": "y1", "field": "observed"},
+              "stroke": {"value": "steelblue"},
+              "strokeWidth": {"value": 2}
+            }
+          }
+        },
+        {
+          "type": "symbol",
+          "from": {"data": "raw_filtered"},
+          "encode": {
+            "update": {
+              "x": {"scale": "x1", "field": "depth"},
+              "y": {"scale": "y1", "field": "observed"},
+              "fill": {"value": "steelblue"},
+              "size": {"value": 30}
+            }
+          }
+        },
+        {
+          "type": "rule",
+          "encode": {
+            "enter": {
+              "y": {"value": 0},
+              "y2": {"signal": "height"},
+              "stroke": {"value": "red"},
+              "strokeWidth": {"value": 2}
+            },
+            "update": {"x": {"scale": "x1", "signal": "knee_point"}}
+          }
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "lower_plot",
+      "encode": {
+        "enter": {
+          "x": {"value": 5},
+          "y": {"value": 525},
+          "width": {"value": 900},
+          "height": {"value": 400}
+        }
+      },
+      "scales": [
+        {
+          "name": "x2",
+          "type": "linear",
+          "domain": {"data": "samples", "field": "depth"},
+          "nice": true,
+          "range": "width"
+        },
+        {
+          "name": "y2",
+          "type": "linear",
+          "domain": {"data": "samples", "field": "num_samples_left"},
+          "nice": true,
+          "range": "height"
+        }
+      ],
+      "axes": [
+        {"scale": "x2", "orient": "bottom", "title": "Read Depth"},
+        {"scale": "y2", "orient": "left", "title": "Number of Samples"}
+      ],
+      "marks": [
+        {
+          "type": "line",
+          "from": {"data": "samples"},
+          "encode": {
+            "update": {
+              "x": {"scale": "x2", "field": "depth"},
+              "y": {"scale": "y2", "field": "num_samples_left"},
+              "stroke": {"value": "steelblue"},
+              "strokeWidth": {"value": 2}
+            }
+          }
+        },
+        {
+          "type": "symbol",
+          "from": {"data": "samples"},
+          "encode": {
+            "update": {
+              "x": {"scale": "x2", "field": "depth"},
+              "y": {"scale": "y2", "field": "num_samples_left"},
+              "fill": {"value": "steelblue"},
+              "size": {"value": 30}
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "config": {
+    "axis": {
+      "titleFontSize": 16,
+      "labelFontSize": 14,
+      "domainWidth": 2,
+      "tickWidth": 2,
+      "titlePadding": 10
+    },
+    "legend": {
+      "titleFontSize": 16,
+      "labelFontSize": 14
+    }
+  }
+}

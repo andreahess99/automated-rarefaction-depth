@@ -89,23 +89,29 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     table_df = table.view(pd.DataFrame)
     alpha = False
     beta = False
-    #observed_features and braycurtis are always included
+    #observed_features, shannon and braycurtis are always included
     metrics.add('observed_features')
-    metrics.add('braycurtis')
+    #uncomment after development
+    #metrics.add('shannon')
+    #metrics.add('braycurtis')
 
-    if any(m in ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'minkowski', 'rogerstanimoto', 'russellrao',
-                        'seuclidean', 'sokalmichener', 'sokalsneath', 'sqeuclidean', 'yule', 'canberra_adkins', 'chebyshev', 'cityblock', 'correlation', 'cosine',
-                        'euclidean', 'aitchison',  'canberra'] for m in metrics):
+    if any(m in ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao', 'canberra_adkins',
+                         'sokalmichener', 'sokalsneath', 'yule', 'correlation', 'cosine', 'aitchison',  'canberra'] for m in metrics):
         beta = True
         print("Beta", beta)
-        metrics_beta = [m for m in metrics if m in ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'minkowski', 'rogerstanimoto', 'russellrao',
-                        'seuclidean', 'sokalmichener', 'sokalsneath', 'sqeuclidean', 'yule', 'canberra_adkins', 'chebyshev', 'cityblock', 'correlation', 'cosine',
-                        'euclidean', 'aitchison',  'canberra']]
+        metrics_beta = [m for m in metrics if m in ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao',
+                         'sokalmichener', 'sokalsneath', 'yule', 'canberra_adkins', 'correlation', 'cosine', 'aitchison',  'canberra']]
         print("metrics beta:", metrics_beta)
+    else:
+            metrics_beta = []
+            kp_list_beta = None
+            df_bars = None
+            num_samples = None
+            data_beta = None
         
     if any(m not in metrics_beta for m in metrics):
         alpha = True 
-        metrics_alpha = [m for m in metrics if m not in metrics_beta] #adjust this list later
+        metrics_alpha = [m for m in metrics if m not in metrics_beta]
         print("metrics alpha:", metrics_alpha)
 
     meta = meta_data.to_dataframe()
@@ -160,6 +166,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     sample_list = table_df.index.tolist()
 
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
+    clean_max_range = [float(x) for x in max_range]
 
     # beta metric specific code
     if beta:
@@ -174,7 +181,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             p75_25_difference = [None] * (steps-1)
             avg_range = [None] * (steps-1)
             #workaround as call fails for sampling_depth=1
-            max_range[0] = 2
+            #max_range[0] = 1
             for i in range(steps):
                 print(f"step {i+1}: {max_range[i]}")
                 #beta_result, = beta_action(table=table, sampling_depth=1, metric=metric, n=iterations, replacement=False)
@@ -205,17 +212,13 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 
                 old_beta_result = beta_result
 
-            clean_max_range = [float(x) for x in max_range]
             clean_avg_diff = [float(x) if x is not None else 0.0 for x in avg_difference]
             data_beta.append(pd.DataFrame({'metric': metric, 'depth': avg_range[1:], 'observed': clean_avg_diff[1:]}))
             if k==0:
                 #clean_samples_left = [int(x) for x in num_samples_left]
                 df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
-            if metric in ['braycurtis', 'jaccard', 'sokalsneath', 'matching', 'cosine', 'yule', 'canberra_adkins', 'jensenshannon', 'hamming',
-                          'dice', 'correlation', 'aitchison', 'canberra', 'rogerstanimoto', 'sokalmichener', 'russellrao']:
-                curve_type = "convex"
-                direction = "decreasing"
-            kpb = knee_point_locator(avg_range[1:], clean_avg_diff[1:], algorithm, "convex", "decreasing") #curve_type, direction
+                
+            kpb = knee_point_locator(avg_range[1:], clean_avg_diff[1:], algorithm, "convex", "decreasing")
             print("knee point for metric", metric, ":", kpb)
             kpb = round(float(kpb)) if kpb is not None else 0
             knee_points_beta.append(pd.DataFrame({'knee': kpb, 'metric': metric}, index=[0]))
@@ -239,7 +242,8 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         df_bars = df_bars.set_index('id')
         num_samples = qiime2.Metadata(df_bars)
         #visualization, = viz_combined_action(max_range=clean_max_range, kmer_run=kmer_run, metric=metric, algorithm=algorithm, num_samples=num_samples, data_beta=data_beta, kp_list_beta=kp_list_beta, beta_metrics=metrics_beta)
-        
+    else:
+        metrics_beta = None
     
     if alpha:
         #if alpha metric was chosen
@@ -458,7 +462,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                   kp_list_beta: qiime2.Metadata = None, data_beta: qiime2.Metadata = None, alpha_metrics: list[str] = None, beta_metrics: list[str] = None)->None:  
     
     #default values for the tabbed_context
-    add_text = False
     percentile = 0
     lower_percentile = 0
     upper_percentile = 0
@@ -544,6 +547,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         for signal in spec_beta["signals"]:
             if signal["name"] == "metricField":
                 signal["bind"]["options"] = beta_metrics
+    else:
+        spec_beta = {"warning": "Warning! No beta metric was specified!"}
 
     if alpha:
         with open(os.path.join(TEMPLATES, "mm_alpha_div.json")) as f:

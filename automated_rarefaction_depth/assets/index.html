@@ -49,22 +49,16 @@
                         (This is the case if the slider hasn't been moved, otherwise it shows the same but with respect to the slider.)
                     </p>
                     <p>
-                        Zoom in and out of the plots for more or less details.
-                    </p>
-                    <p>
-                        Click on the checkbox above the plots to show the line with the rarefaction depth according to the slider.
-                        Move the slider to change the black rarefaction depth line accordingly. Additionally, the bars in the barplot 
-                        on the right are blue if the sample has a read count above the specified rarefaction depth, meaning that
-                        sample would be included if this rarefaction depth was chosen, otherwise the bars are grey. 
-                    </p>
-                    <p>
                         ATTENTION! The acceptable range of rarefaction depths is set to keeping at least {{ percent_samples_100 }}% of all samples. 
                         The sensitivity of the kneedle algorithm is set to 3, and the evaluated depths are linearly spaced between 
                         1 and the read depth of the sample at the {{ max_read_percentile }}th percentile.
                     </p>
-                    <div class="col-lg-12" id="plots_summary" style="max-height: 480px; overflow: hidden;"></div>
+                    <!--<div class="col-lg-12" id="plots_summary" style="max-height: 480px; overflow: hidden;"></div>
                         <div id="plots" style="width: 100%; height: 480px;"></div>  
-                    </div> 
+                     -->
+                    <div class="col-lg-12" id="plots_summary"></div>
+                        <div id="plots" style="width: 100%;"></div>
+                    </div>
             </div>   
         </div> 
     </div>
@@ -79,7 +73,7 @@
     }}
   </script>
 
-  <script type="text/javascript">
+  <!-- <script type="text/javascript">
     $(document).ready(function () {
         const vegaSpecSummary = JSON.parse(document.getElementById('vega_json').textContent);
             vegaEmbed("#plots", vegaSpecSummary).then(
@@ -93,7 +87,41 @@
                 }
             );
     });
-  </script>   
+  </script>  -->
+  <script type="text/javascript">
+    $(document).ready(function () {
+        const vegaSpecSummary = JSON.parse(document.getElementById('vega_json').textContent);
+        const target = "#plots";
+        
+        const container = document.querySelector(target);
+        if (!container) return;
+
+        vegaEmbed(target, vegaSpecSummary, {actions: false}).then(
+            function (result) {
+                // Initialize to container width
+                var width = container.offsetWidth;
+                result.view.width(width).run();
+
+                // Window Resize Listener
+                window.addEventListener('resize', function() {
+                    var newWidth = document.querySelector(target).offsetWidth;
+                    result.view.width(newWidth).run();
+                });
+
+                result.view.logLevel(vega.Warn);
+                window.v = result.view;
+            }
+        ).catch(
+            function (error) {
+                if (typeof handleErrors === "function") {
+                    handleErrors([error], $(target));
+                } else {
+                    console.error("Vega Error: ", error);
+                }
+            }
+        );
+    });
+  </script>
   
 
   <script>

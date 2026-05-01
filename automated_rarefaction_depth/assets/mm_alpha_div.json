@@ -1,5 +1,6 @@
 {
   "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "autosize": {"type": "fit-x", "contains": "padding"},
   "width": 900,
   "height": 400,
   "signals": [
@@ -91,8 +92,10 @@
         "enter": {
           "x": {"value": 5},
           "y": {"value": 75},
-          "width": {"value": 900},
           "height": {"value": 400}
+        },
+        "update": {
+          "width": {"signal": "width"}
         }
       },
       "scales": [
@@ -185,8 +188,10 @@
         "enter": {
           "x": {"value": 5},
           "y": {"value": 550},
-          "width": {"value": 900},
           "height": {"value": 400}
+        },
+        "update": {
+          "width": {"signal": "width"}
         }
       },
       "scales": [
@@ -252,13 +257,25 @@
   "legends": [
     {
       "fill": "color",
-      "title": "Group",
-      "orient": "bottom",
+      "title": "Legend",
+      "orient": "right",
       "encode": {
         "symbols": {"update": {"size": {"value": 100}}},
         "labels": {"update": {"fontSize": {"value": 12}}}
       }
     }
   ],
-  "config": {}
+  "config": {
+    "axis": {
+      "titleFontSize": 16,
+      "labelFontSize": 14,
+      "domainWidth": 2,
+      "tickWidth": 2,
+      "titlePadding": 10
+    },
+    "legend": {
+      "titleFontSize": 16,
+      "labelFontSize": 14
+    }
+  }
 }

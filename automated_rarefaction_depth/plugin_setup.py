@@ -61,7 +61,7 @@ plugin.pipelines.register_function(
             'sequence': FeatureData[Sequence]},
     outputs={'visualization': Visualization},
     parameters={'percent_samples': Float % Range(0, 1),
-                'meta_data': Metadata, #added for testing working with metadata for the vega plot
+                'meta_data': Metadata,
                 'iterations': Int % Range(1, 100),
                 'table_size': Int % Range(1, None),
                 'steps': Int % Range(10, 100), 
@@ -69,9 +69,9 @@ plugin.pipelines.register_function(
                 'seed': Int % Range(1, None),
                 'metrics': Set[Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard', 'simpson', 'brillouin_d', 
                                          'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit','dominance', 'simpson_e', 'mcintosh_e',
-                                         'robbins', 'berger_parker_d','hamming', 'dice', 'seuclidean', 'correlation', 'sokalmichener', 'yule',
-                                         'jensenshannon', 'matching', 'minkowski', 'rogerstanimoto', 'russellrao', 'sqeuclidean', 'sokalsneath',
-                                         'canberra_adkins', 'chebyshev', 'cityblock',  'cosine', 'euclidean', 'aitchison',  'canberra',])], #added more alpha and beta metric choices
+                                         'robbins', 'berger_parker_d','hamming', 'dice', 'correlation', 'sokalmichener', 'yule',
+                                         'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao', 'sokalsneath',
+                                         'canberra_adkins', 'cosine', 'aitchison',  'canberra'])], 
                 'kmer_size': Int,
                 'tfidf': Bool,
                 'max_df': Float % Range(0, 1, inclusive_start=True,
@@ -185,9 +185,8 @@ plugin.visualizers.register_function(
                 'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard', 'simpson', 'brillouin_d',
                                          'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit','dominance',
                                          'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'canberra_adkins',
-                                          'hamming', 'dice', 'euclidean', 'aitchison',  'canberra', 'correlation', 'cosine',
-                                          'jensenshannon', 'matching', 'minkowski', 'rogerstanimoto', 'russellrao', 'yule',
-                                         'seuclidean', 'sokalmichener', 'sokalsneath', 'sqeuclidean', 'chebyshev', 'cityblock']), #added some beta metrics
+                                          'hamming', 'dice', 'aitchison',  'canberra', 'correlation', 'cosine', 'russellrao',
+                                          'jensenshannon', 'matching', 'rogerstanimoto', 'yule', 'sokalmichener', 'sokalsneath']), #added some beta metrics
                 'max_reads': Int % Range(1, None),
                 'max_read_percentile': Int % Range(1, 100),
                 'depth_threshold': Int % Range(1, None),
