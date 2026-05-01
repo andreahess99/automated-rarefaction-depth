@@ -65,7 +65,7 @@ _pipe_defaults = {
     'min_df': 1,
     'max_features': None,
     'norm': 'None',
-    'metrics': {'observed_features'}
+    'metrics': {'observed_features', 'shannon'}
 }
 
 
@@ -90,7 +90,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     alpha = False
     beta = False
     #observed_features, shannon and braycurtis are always included
-    metrics.add('observed_features')
+    #metrics.add('observed_features')
     #uncomment after development
     #metrics.add('shannon')
     #metrics.add('braycurtis')
@@ -317,8 +317,15 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         kp_df.index = kp_df.index.astype(str)
         knee_point_list = qiime2.Metadata(kp_df)
         metrics = list(metrics)
+    else:
+        combined = None
+        knee_point_list = None
+        percent_samples_100 = float(percent_samples * 100)
+        sorted_depths_pass = None
+        metrics_alpha = None
+        knee_point = 0
         
-        visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, steps=steps, algorithm=algorithm,
+    visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, steps=steps, algorithm=algorithm,
                         sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, 
                         combined=combined, metadata_columns=metadata_columns, rps=qiime2.Metadata(reads_per_sample_merged), kp_list=knee_point_list,
                         kp_list_beta=kp_list_beta, data_beta=data_beta, alpha_metrics=metrics_alpha, beta_metrics=metrics_beta, num_samples=num_samples, max_range=clean_max_range) 
@@ -581,6 +588,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 d["values"] = rps.to_dict(orient='records')"""
             if d["name"] == "knee_points":
                 d["values"] = kp_list
+    else:
+        spec = {"warning": "Warning! No alpha metric was specified!"}
 
     
     vega_json = json.dumps(spec)
@@ -596,6 +605,7 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         "beta_metric": str(metric),
         "algorithm": str(algorithm),
         "knee_point": (knee_point),
+        "alpha": alpha,
         "beta": beta,
         "percent_samples_100": json.dumps(float(percent_samples_100)),
         "depth_threshold": json.dumps(int(depth_threshold)),

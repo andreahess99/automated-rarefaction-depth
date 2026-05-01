@@ -7,12 +7,20 @@
     {
       "name": "groupField",
       "value": "sample",
-      "bind": {"input": "select", "options": [], "name": "Group by: "}
+      "bind": {
+        "input": "select", 
+        "options": ["sample", "treatment", "condition", "group"], 
+        "name": "Group by: "
+      }
     },
     {
       "name": "metricField",
-      "value": "observed_features",
-      "bind": {"input": "select", "options": [], "name": "Metric: "}
+      "init": "data('raw')[0] ? data('raw')[0].metric : null",
+      "bind": {
+        "input": "select", 
+        "options": ["observed_features", "shannon", "braycurtis", "jaccard"], 
+        "name": "Metric: "
+      }
     },
     {
       "name": "knee_point",

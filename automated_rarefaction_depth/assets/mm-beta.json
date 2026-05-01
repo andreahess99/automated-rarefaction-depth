@@ -6,17 +6,32 @@
   "signals": [
     {
       "name": "metricField",
-      "value": "braycurtis",
-      "bind": {"input": "select", "options": ["braycurtis"], "name": "Metric: "}
+      "init": "data('raw')[0] ? data('raw')[0].metric : null",
+      "bind": {
+        "input": "select",
+        "options": [
+          "braycurtis", 
+          "jaccard", 
+          "unweighted_unifrac", 
+          "weighted_unifrac"
+        ], 
+        "name": "Metric: "
+      }
     },
     {
       "name": "knee_point",
       "update": "length(data('selected_knee')) > 0 ? data('selected_knee')[0].knee : null"
     },
-    {"name": "x_axis_title", "value": "Sequencing Depth"}
+    {
+      "name": "x_axis_title", 
+      "value": "Sequencing Depth"
+    }
   ],
   "data": [
-    {"name": "raw", "values": []},
+    {
+      "name": "raw", 
+      "values": []
+    },
     {
       "name": "raw_filtered",
       "source": "raw",
@@ -24,13 +39,21 @@
         {"type": "filter", "expr": "metricField && datum.metric === metricField"}
       ]
     },
-    {"name": "knee_points", "values": [{"knee": 200, "metric": "braycurtis"}]},
+    {
+      "name": "knee_points", 
+      "values": [{"knee": 200, "metric": "braycurtis"}]
+    },
     {
       "name": "selected_knee",
       "source": "knee_points",
-      "transform": [{"type": "filter", "expr": "datum.metric === metricField"}]
+      "transform": [
+        {"type": "filter", "expr": "datum.metric === metricField"}
+      ]
     },
-    {"name": "samples", "values": []}
+    {
+      "name": "samples", 
+      "values": []
+    }
   ],
   "scales": [],
   "marks": [

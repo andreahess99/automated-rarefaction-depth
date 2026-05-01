@@ -31,12 +31,12 @@
     </ul>
 </nav>
 
-
   <div class="row">
     <div class="col-lg-12">
         <div class="card">
             <h5 class="card-header">Automated Rarefaction Depth Summary</h5>
             <div class="card-body">
+                {% if alpha is sameas true %}
                     <p>
                         The Rarefaction Curves plot on the left shows the {{ graph_data }}
                         at each depth for every sample as a curve. The shaded area represents the specified acceptable
@@ -59,6 +59,12 @@
                     <div class="col-lg-12" id="plots_summary"></div>
                         <div id="plots" style="width: 100%;"></div>
                     </div>
+                {% else %}
+                    <p>
+                        WARNING! No alpha diversity metric was specified, so the rarefaction analysis for alpha diversity was not
+                        performed. Please specify an alpha diversity metric to see the results here.
+                    </p>
+                {% endif %}
             </div>   
         </div> 
     </div>
@@ -138,6 +144,7 @@
     const graphName = "{{ graph_name }}";
     const maxReadPercentile = {{ max_read_percentile | safe }};
     const isBeta = {{ beta | lower }};
+    const isAlpha = {{ alpha | lower }};
     const betaMetric = "{{ beta_metric }}";
     const algorithm = "{{ algorithm }}";
   </script>
