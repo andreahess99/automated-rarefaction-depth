@@ -15,6 +15,8 @@
 <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
 
 <link crossorigin="anonymous" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" integrity="sha256-YvdLHPgkqJ8DVUxjjnGVlMMJtNimJ6dYkowFFvp4kKs=" rel="stylesheet"/>
+<!-- IMPORTANT: Added Bootstrap JS Bundle (includes Popper) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
 {% endblock %}
 
@@ -37,7 +39,17 @@
             <h5 class="card-header">Automated Rarefaction Depth Summary</h5>
             <div class="card-body">
                 {% if alpha is sameas true %}
-                    <p>
+                    <!-- Help Button placed right where the text used to be 
+                    <div class="d-flex justify-content-end mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3">-->
+                    <div class="toolbar-container">
+                        <div id="vega-bindings-container"></div>
+                        <span id="knee-point-display" class="knee-point-box">Knee point: —</span>
+                        <button type="button" class="btn btn-outline-info btn-sm" id="openHelpBtn">
+                            <strong>?</strong> Help & Info
+                        </button>
+                    </div>
+                    <!--<p>
                         The Rarefaction Curves plot on the left shows the {{ graph_data }}
                         at each depth for every sample as a curve. The shaded area represents the specified acceptable
                         range of rarefaction depths. The optimal rarefaction depth is depicted as the vertical line named knee point. 
@@ -53,7 +65,7 @@
                         The sensitivity of the kneedle algorithm is set to 3, and the evaluated depths are linearly spaced between 
                         1 and the read depth of the sample at the {{ max_read_percentile }}th percentile.
                     </p>
-                    <!--<div class="col-lg-12" id="plots_summary" style="max-height: 480px; overflow: hidden;"></div>
+                    <div class="col-lg-12" id="plots_summary" style="max-height: 480px; overflow: hidden;"></div>
                         <div id="plots" style="width: 100%; height: 480px;"></div>  
                      -->
                     <div class="col-lg-12" id="plots_summary"></div>
@@ -70,6 +82,33 @@
     </div>
   </div>
 
+  <!-- Help Modal Structure -->
+<div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="helpModalLabel">Alpha Rarefaction Help</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>
+            The Rarefaction Curves plot on top shows the chosen alpha diversity metric from the dropdown menu
+            at each depth for every sample as a curve. Change it to see a different metric.
+            Change the grouping of the data with the 'group by' dropdown menu.<br>
+            The optimal rarefaction depth is depicted as the vertical red line. 
+            It is the knee point that was calculated using the {{ algorithm }} algorithm.
+        </p>
+        <p>
+            The lower plot shows the number of samples which have a certain number of reads. This shows how many samples were
+            included at each read depth in the upper plot. 
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
 
   <script id="vega_json" type="application/json">
     {{
@@ -79,36 +118,29 @@
     }}
   </script>
 
-  <!-- <script type="text/javascript">
-    $(document).ready(function () {
-        const vegaSpecSummary = JSON.parse(document.getElementById('vega_json').textContent);
-            vegaEmbed("#plots", vegaSpecSummary).then(
-                function (result) {
-                    result.view.logLevel(vega.Warn);
-                    window.v = result.view;
-                }
-            ).catch(
-                function (error) {
-                    handleErrors([error], $("#plots"));
-                }
-            );
-    });
-  </script>  -->
   <script type="text/javascript">
     $(document).ready(function () {
+        // 1. Manual Modal Trigger Logic
+        const helpBtn = document.getElementById('openHelpBtn');
+        if (helpBtn) {
+            helpBtn.addEventListener('click', function() {
+                var myModal = new bootstrap.Modal(document.getElementById('helpModal'));
+                myModal.show();
+            });
+        }
+
         const vegaSpecSummary = JSON.parse(document.getElementById('vega_json').textContent);
         const target = "#plots";
         
         const container = document.querySelector(target);
         if (!container) return;
 
-        vegaEmbed(target, vegaSpecSummary, {actions: false}).then(
+        vegaEmbed(target, vegaSpecSummary, {actions: false, bind: "#vega-bindings-container"}).then(
             function (result) {
-                // Initialize to container width
+              
                 var width = container.offsetWidth;
                 result.view.width(width).run();
 
-                // Window Resize Listener
                 window.addEventListener('resize', function() {
                     var newWidth = document.querySelector(target).offsetWidth;
                     result.view.width(newWidth).run();
@@ -116,6 +148,23 @@
 
                 result.view.logLevel(vega.Warn);
                 window.v = result.view;
+
+                //adding the knee point display 
+                function updateKneeDisplay() {
+                    var kp = result.view.signal('knee_point');
+                    var display = document.getElementById('knee-point-display');
+                    display.textContent = kp != null ? 'Knee point: ' + Math.round(kp).toLocaleString('de-CH') : 'Knee point: —';
+                }
+
+                result.view.addSignalListener('knee_point', function() {
+                    updateKneeDisplay();
+                });
+                result.view.addSignalListener('metricField', function() {
+                    // Small delay to let knee_point signal update first
+                    setTimeout(updateKneeDisplay, 50);
+                });
+
+                updateKneeDisplay(); // set initial value
             }
         ).catch(
             function (error) {
@@ -148,6 +197,9 @@
     const betaMetric = "{{ beta_metric }}";
     const algorithm = "{{ algorithm }}";
   </script>
+
+
+  
 
 {% endblock %}
 

@@ -63,7 +63,7 @@
       "encode": {
         "enter": {
           "x": {"value": 5},
-          "y": {"value": 50},
+          "y": {"value": 25},
           "height": {"value": 400}
         },
         "update": {
@@ -135,7 +135,7 @@
       "encode": {
         "enter": {
           "x": {"value": 5},
-          "y": {"value": 525},
+          "y": {"value": 550},
           "height": {"value": 400}
         },
         "update": {
