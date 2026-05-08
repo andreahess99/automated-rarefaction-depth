@@ -10,7 +10,7 @@
       "bind": {
         "input": "select", 
         "options": ["sample", "treatment", "condition", "group"], 
-        "name": "Group by: "
+        "name": "Group by "
       }
     },
     {
@@ -19,7 +19,7 @@
       "bind": {
         "input": "select", 
         "options": ["observed_features", "shannon", "braycurtis", "jaccard"], 
-        "name": "Metric: "
+        "name": "Metric "
       }
     },
     {

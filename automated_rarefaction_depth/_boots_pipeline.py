@@ -247,12 +247,13 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     
     if alpha:
         #if alpha metric was chosen
-        dfs = []
+        #dfs = []
         combined_dfs = []
         knee_point_list = []
 
         for metric in metrics_alpha:
             print("metric:", metric)
+            dfs = []
             for i in range(steps):
                 print(f"step {i+1}: {max_range[i]}")
                 """result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
@@ -271,14 +272,14 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                     dfs.append(df)
                     
                 combined = pd.concat(dfs, ignore_index=True)
-                #potentially do it after the loop so you only merge once 
-                meta.fillna(0, inplace=True)
-                combined = combined.merge(meta, left_on="sample", right_index=True, how="left")
 
                 # Calculate average after collecting all iterations for this depth
                 #making the mean_df which I would need for the knee point calculation
                 mean_df = (combined.groupby(['sample', 'read_depth'], as_index=False).agg(mean_observed=('observed', 'mean')))
             
+            meta.fillna(0, inplace=True)
+            combined = combined.merge(meta, left_on="sample", right_index=True, how="left")
+
             combined_dfs.append(combined)
             #calculatin knee point here as data formats are a bit different
             if metric in ['observed_features', 'shannon', 'simpson', 'brillouin_d', 'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit']:
@@ -307,9 +308,9 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     
         percent_samples_100 = round(percent_samples * 100, 2)
  
+        combined = pd.concat(combined_dfs, ignore_index=True)
         combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
         combined = combined.set_index('id')
-       
         combined = qiime2.Metadata(combined)
         
         kp_df = pd.DataFrame(knee_point_list, columns=['knee', 'metric'])
@@ -540,7 +541,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
 
     #dynamically populating the vega plot
     if beta:
-        #new mm plot
         with open(os.path.join(TEMPLATES, "mm-beta.json")) as f:
             spec_beta = json.load(f)
         for d in spec_beta["data"]:
@@ -554,8 +554,11 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         for signal in spec_beta["signals"]:
             if signal["name"] == "metricField":
                 signal["bind"]["options"] = beta_metrics
+
+        csv_string_beta = line_chart_df.to_csv(index=True)
     else:
         spec_beta = {"warning": "Warning! No beta metric was specified!"}
+        csv_string_beta = ""
 
     if alpha:
         with open(os.path.join(TEMPLATES, "mm_alpha_div.json")) as f:
@@ -588,12 +591,19 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 d["values"] = rps.to_dict(orient='records')"""
             if d["name"] == "knee_points":
                 d["values"] = kp_list
+            
+        csv_string_alpha = combined.to_csv(index=True)
+        print("combined:", combined.head())
+        print("combined:", combined)
     else:
         spec = {"warning": "Warning! No alpha metric was specified!"}
+        csv_string_alpha = ""
 
     
     vega_json = json.dumps(spec)
     vega_json2 = json.dumps(spec_beta)
+
+    
 
     tabbed_context = {
         "tabs": [
@@ -616,7 +626,9 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         "upper_value": json.dumps(float(upper_value)),
         "graph_data": graph_data,
         "graph_name": graph_name,
-        "max_read_percentile": json.dumps(int(max_read_percentile))
+        "max_read_percentile": json.dumps(int(max_read_percentile)),
+        "csv_data_alpha": csv_string_alpha,
+        "csv_data_beta": csv_string_beta,  # Assuming you have a similar variable for beta data
     }
     
     #templates = os.path.join(TEMPLATES, 'index.html')
@@ -631,7 +643,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         dst=output_dir,
         dirs_exist_ok=True 
     )
-   
+
+    
     q2templates.render(templates, output_dir, context=tabbed_context)
 
 

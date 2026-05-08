@@ -39,35 +39,16 @@
             <h5 class="card-header">Automated Rarefaction Depth Summary</h5>
             <div class="card-body">
                 {% if alpha is sameas true %}
-                    <!-- Help Button placed right where the text used to be 
-                    <div class="d-flex justify-content-end mb-3">
-                    <div class="d-flex justify-content-between align-items-center mb-3">-->
                     <div class="toolbar-container">
                         <div id="vega-bindings-container"></div>
                         <span id="knee-point-display" class="knee-point-box">Knee point: —</span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="downloadBtn">
+                            ⬇ Download CSV
+                        </button>
                         <button type="button" class="btn btn-outline-info btn-sm" id="openHelpBtn">
                             <strong>?</strong> Help & Info
                         </button>
                     </div>
-                    <!--<p>
-                        The Rarefaction Curves plot on the left shows the {{ graph_data }}
-                        at each depth for every sample as a curve. The shaded area represents the specified acceptable
-                        range of rarefaction depths. The optimal rarefaction depth is depicted as the vertical line named knee point. 
-                        It is the knee point that was calculated using the {{ algorithm }} algorithm.
-                    </p>
-                    <p>
-                        The Histogram of {{ graph_name }} per Sample on the right shows the number of samples which have a certain number of reads.
-                        The grey bars are the samples that would be excluded if the rarefaction depth was set to the knee point, the blue bars the ones included.
-                        (This is the case if the slider hasn't been moved, otherwise it shows the same but with respect to the slider.)
-                    </p>
-                    <p>
-                        ATTENTION! The acceptable range of rarefaction depths is set to keeping at least {{ percent_samples_100 }}% of all samples. 
-                        The sensitivity of the kneedle algorithm is set to 3, and the evaluated depths are linearly spaced between 
-                        1 and the read depth of the sample at the {{ max_read_percentile }}th percentile.
-                    </p>
-                    <div class="col-lg-12" id="plots_summary" style="max-height: 480px; overflow: hidden;"></div>
-                        <div id="plots" style="width: 100%; height: 480px;"></div>  
-                     -->
                     <div class="col-lg-12" id="plots_summary"></div>
                         <div id="plots" style="width: 100%;"></div>
                     </div>
@@ -120,6 +101,15 @@
 
   <script type="text/javascript">
     $(document).ready(function () {
+        document.getElementById('downloadBtn').addEventListener('click', function() {
+            const blob = new Blob([csvDataAlpha], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'rarefaction_data_alpha.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
         // 1. Manual Modal Trigger Logic
         const helpBtn = document.getElementById('openHelpBtn');
         if (helpBtn) {
@@ -196,6 +186,7 @@
     const isAlpha = {{ alpha | lower }};
     const betaMetric = "{{ beta_metric }}";
     const algorithm = "{{ algorithm }}";
+    const csvDataAlpha = {{ csv_data_alpha | tojson }};
   </script>
 
 

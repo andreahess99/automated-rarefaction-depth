@@ -20,7 +20,7 @@
 /*adjustment for Bootstrap 5*/
 .table {
     border: 1px solid #dee2e6;
-    margin-top: 10px
+    margin-top: 10px;
 }
 
 .pagination {
@@ -28,8 +28,8 @@
 }
 
 .combinedChartContainer {
-font-family: sans-serif;
-color: red;
+    font-family: sans-serif;
+    color: red;
 }
 
 /* SPINKIT */
@@ -50,102 +50,94 @@ The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 */
 
 .spinner {
-  margin: 100px auto;
-  width: 50px;
-  height: 40px;
-  text-align: center;
-  font-size: 10px;
+    margin: 100px auto;
+    width: 50px;
+    height: 40px;
+    text-align: center;
+    font-size: 10px;
 }
 
 .spinner > div {
-  background-color: #333;
-  height: 100%;
-  width: 6px;
-  display: inline-block;
-
-  -webkit-animation: sk-stretchdelay 1.2s infinite ease-in-out;
-  animation: sk-stretchdelay 1.2s infinite ease-in-out;
+    background-color: #333;
+    height: 100%;
+    width: 6px;
+    display: inline-block;
+    -webkit-animation: sk-stretchdelay 1.2s infinite ease-in-out;
+    animation: sk-stretchdelay 1.2s infinite ease-in-out;
 }
 
-.spinner .rect2 {
-  -webkit-animation-delay: -1.1s;
-  animation-delay: -1.1s;
-}
-
-.spinner .rect3 {
-  -webkit-animation-delay: -1.0s;
-  animation-delay: -1.0s;
-}
-
-.spinner .rect4 {
-  -webkit-animation-delay: -0.9s;
-  animation-delay: -0.9s;
-}
-
-.spinner .rect5 {
-  -webkit-animation-delay: -0.8s;
-  animation-delay: -0.8s;
-}
+.spinner .rect2 { -webkit-animation-delay: -1.1s; animation-delay: -1.1s; }
+.spinner .rect3 { -webkit-animation-delay: -1.0s; animation-delay: -1.0s; }
+.spinner .rect4 { -webkit-animation-delay: -0.9s; animation-delay: -0.9s; }
+.spinner .rect5 { -webkit-animation-delay: -0.8s; animation-delay: -0.8s; }
 
 @-webkit-keyframes sk-stretchdelay {
-  0%, 40%, 100% { -webkit-transform: scaleY(0.4) }
-  20% { -webkit-transform: scaleY(1.0) }
+    0%, 40%, 100% { -webkit-transform: scaleY(0.4); }
+    20%            { -webkit-transform: scaleY(1.0); }
 }
 
 @keyframes sk-stretchdelay {
-  0%, 40%, 100% {
-    transform: scaleY(0.4);
-    -webkit-transform: scaleY(0.4);
-  }  20% {
-    transform: scaleY(1.0);
-    -webkit-transform: scaleY(1.0);
-  }
+    0%, 40%, 100% { transform: scaleY(0.4); -webkit-transform: scaleY(0.4); }
+    20%            { transform: scaleY(1.0); -webkit-transform: scaleY(1.0); }
 }
 
+/* ── Form inputs ─────────────────────────────────────────────────────────── */
 
 input[type="range"] {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif !important;
-  font-size: 12px;
-  color: #333;
-  background-color: #f5f5f5;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  padding: 2px 5px;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif !important;
+    font-size: 12px;
+    color: #333;
+    background-color: #f5f5f5;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 2px 5px;
 }
+
+input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #007bff;
+    cursor: pointer;
+}
+
+/* ── Vega bindings (global) ──────────────────────────────────────────────── */
+
 span.vega-bind-name {
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif !important;
     font-size: 14px;
     font-weight: bold;
     color: #000;
-    margin-right: 10px; /* Space between label and checkbox */
+    margin-right: 10px;
     white-space: nowrap;
-    padding-left: 5px; /* Move text slightly to the right */
+    padding-left: 5px;
 }
 
-input[type="checkbox"] {
-    width: 16px; /* Adjust size */
-    height: 16px; /* Adjust size */
-    accent-color: #007bff; /* Modern browsers support accent-color for the checkbox */
-    cursor: pointer; /* Change cursor to pointer on hover */
-}
-/* moving slider & checkbox */
+/* Override absolute positioning injected by Vega */
 form.vega-bindings {
-  position: absolute;
-  left: 0px;
-  top: -10px;
-  z-index: 9999;
+    position: absolute;
+    left: 0px;
+    top: -10px;
+    z-index: 9999;
 }
 
-/* style for tabs */
-/* Custom Navigation Bar */
+/* Keep Vega controls behind Bootstrap modals */
+.vega-bindings,
+.vega-bind,
+.vega-embed {
+    z-index: 1 !important;
+}
+
+/* ── Custom navigation tabs ──────────────────────────────────────────────── */
+
 .custom-nav {
     margin-top: 15px;
     margin-bottom: 20px;
@@ -155,8 +147,8 @@ form.vega-bindings {
 .custom-nav ul {
     list-style: none;
     padding: 0;
-    display: flex;
     margin: 0;
+    display: flex;
 }
 
 .custom-nav li a {
@@ -164,134 +156,66 @@ form.vega-bindings {
     padding: 10px 20px;
     text-decoration: none;
     font-weight: 500;
-    color: #555 !important; /* Inactive tab: Black/Grey */
+    color: #555 !important;
     border-bottom: 3px solid transparent;
     transition: all 0.2s ease;
 }
 
-/* Hover state for inactive tabs */
 .custom-nav li a:hover {
     background-color: #f8f9fa;
     color: #0056b3 !important;
 }
 
-/* Active tab state */
 .custom-nav li.active a {
-    color: #007bff !important; /* Active tab: Blue */
+    color: #007bff !important;
     font-weight: bold;
-    border-bottom: 3px solid #007bff; /* Blue underline */
+    border-bottom: 3px solid #007bff;
 }
 
-/* 1. Push the Modal and its dark backdrop to the very front */
-.modal {
-    z-index: 2000 !important;
-}
+/* ── Bootstrap modal z-index fix ─────────────────────────────────────────── */
 
-.modal-backdrop {
-    z-index: 1990 !important;
-}
+.modal         { z-index: 2000 !important; }
+.modal-backdrop { z-index: 1990 !important; }
 
-/* 2. Force Vega dropdowns/controls to stay in the background */
-/* .vega-bindings is the container for dropdowns, .vega-bind is the individual element */
-.vega-bindings, 
-.vega-bind, 
-.vega-embed {
-    z-index: 1 !important;
-}
-
-/* Align the dropdown container and button in one line */
-.controls-row {
-  display: flex;
-  flex-direction: row;
-  align-items: center; /* Vertical alignment */
-  gap: 20px;           /* Space between dropdown and button */
-  margin-bottom: 10px;
-}
-
-/* Target the specific Vega container */
-#bindings .vega-bindings {
-  display: flex;
-  align-items: center;
-  margin: 0;
-}
-
-/* Optional: Style the button to match the dropdown height */
-.help-btn {
-  height: 28px;
-  width: 28px;
-  border-radius: 50%;
-  cursor: pointer;
-  border: 1px solid #ccc;
-  background: #f9f9f9;
-}
-
-
-/* 1. Put the dropdowns back into the horizontal flow */
-#vega-bindings-container .vega-bindings {
-    position: static !important;   /* CRITICAL: Overrides the absolute positioning */
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    gap: 25px !important;          /* Space between 'Group by' and 'Metric' */
-    align-items: center !important;
-    margin: 0 !important;
-}
-
-/* 2. Ensure Label and Box stay on the same line */
-#vega-bindings-container .vega-bind {
-    display: flex !important;
-    align-items: center !important;
-    margin: 0 !important;
-    white-space: nowrap !important;
-}
-
-/* 3. Space between label text and the box */
-#vega-bindings-container .vega-bind-name {
-    margin-right: 8px !important;
-    font-weight: bold !important;
-}
+/* ── Toolbar (dropdowns + knee point box + help button) ──────────────────── */
 
 .toolbar-container {
     display: flex;
     flex-direction: row;
-    align-items: flex-end; /*center*/
+    align-items: flex-end;
     gap: 12px;
     margin-bottom: 12px;
 }
 
-#metric-dropdown-container,
-#vega-bindings-container {
+#vega-bindings-container,
+#metric-dropdown-container {
     display: flex;
-    align-items: flex-end;
     flex-direction: row;
-    /*align-items: center;*/
+    align-items: flex-end;
     gap: 12px;
 }
 
-#metric-dropdown-container .vega-bind-name {
-    font-weight: bold !important;
+/* Override Vega's absolute positioning inside our containers */
+#vega-bindings-container .vega-bindings {
+    position: static !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 25px !important;
+    align-items: flex-end !important;
+    margin: 0 !important;
 }
 
-#openHelpBtn {
-    margin-left: auto;
+/* Stack label above select */
+#vega-bindings-container .vega-bind,
+#metric-dropdown-container .vega-bind {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    margin: 0 !important;
 }
 
-.knee-point-box {
-    padding: 3px 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background-color: #f8f9fa;
-    font-size: 0.875rem;
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-}
-
-#metric-dropdown-container select,
-#vega-bindings-container select {
-    margin-bottom: 0;
-}
-
+/* Label styling */
 #vega-bindings-container .vega-bind-name,
 #metric-dropdown-container .vega-bind-name {
     display: block;
@@ -301,19 +225,12 @@ form.vega-bindings {
     font-weight: normal;
 }
 
-#vega-bindings-container .vega-bind,
-#metric-dropdown-container .vega-bind {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    margin: 0 !important;
+/* Bold label for beta page */
+#metric-dropdown-container .vega-bind-name {
+    font-weight: bold !important;
 }
 
-#vega-bindings-container > div,
-#metric-dropdown-container > div {
-    margin-bottom: 0;
-}
-
+/* Select styling (Bootstrap 3 form-control look) */
 #vega-bindings-container select,
 #metric-dropdown-container select {
     display: inline-block;
@@ -338,10 +255,17 @@ form.vega-bindings {
     box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(102,175,233,.6);
 }
 
+/* Wrapper divs injected by Vega */
+#vega-bindings-container > div,
+#metric-dropdown-container > div {
+    margin-bottom: 0;
+}
+
+/* ── Knee point display box ───────────────────────────────────────────────── */
+
 .knee-point-box {
     display: inline-flex;
     align-items: center;
-    /*align-self: center;*/
     align-self: flex-end;
     height: 34px;
     padding: 6px 12px;
@@ -354,3 +278,8 @@ form.vega-bindings {
     white-space: nowrap;
 }
 
+/* ── Help button ─────────────────────────────────────────────────────────── */
+
+#openHelpBtn {
+    margin-left: auto;
+}
