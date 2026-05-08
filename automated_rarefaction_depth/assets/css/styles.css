@@ -225,10 +225,12 @@ form.vega-bindings {
     font-weight: normal;
 }
 
-/* Bold label for beta page */
-#metric-dropdown-container .vega-bind-name {
+/* Bold label for alpha & beta page */
+#metric-dropdown-container .vega-bind-name,
+#vega-bindings-container .vega-bind-name {
     font-weight: bold !important;
 }
+
 
 /* Select styling (Bootstrap 3 form-control look) */
 #vega-bindings-container select,
@@ -282,4 +284,38 @@ form.vega-bindings {
 
 #openHelpBtn {
     margin-left: auto;
+}
+
+#downloadBtn, #openHelpBtn {
+    border-color: #ced4da;
+    color: #6c757d;
+}
+
+#downloadBtn:hover, #openHelpBtn:hover {
+    background-color: #ced4da;
+    color: #fff;
+}
+
+.toolbar-container,
+.d-flex.justify-content-between {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.toolbar-container > *,
+.d-flex.justify-content-between > * {
+    height: 38px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+}
+
+.knee-point-box {
+    height: 38px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
 }

@@ -544,8 +544,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         with open(os.path.join(TEMPLATES, "mm-beta.json")) as f:
             spec_beta = json.load(f)
         for d in spec_beta["data"]:
-            if d["name"] == "raw":
-                d["values"] = line_chart_df.to_dict(orient='records')
+            """if d["name"] == "raw":
+                d["values"] = line_chart_df.to_dict(orient='records')"""
             if d["name"] == "samples":
                 d["values"] = df_bars.to_dict(orient='records') 
             if d["name"] == "knee_points":
@@ -573,10 +573,10 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 signal["value"] = x_title
 
         for d in spec["data"]:
-            if d["name"] == "raw":
+            """if d["name"] == "raw":
                 combined = combined.to_dataframe().reset_index()
                 combined = combined.drop('id', axis=1)
-                d["values"] = combined.to_dict(orient='records')
+                d["values"] = combined.to_dict(orient='records')"""
             if d["name"] == "samples":
                 max_range = np.linspace(1, max_reads, num=steps, dtype=int)
                 depths_list = [int(d) for d in max_range]
@@ -586,24 +586,19 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 for s in samples_records:
                     s["all_depths"] = depths_list
                 d["values"] = samples_records
-                """rps.rename(columns={"sample-id": "sample"}, inplace=True)
-                rps = rps.set_index("sample").reset_index()
-                d["values"] = rps.to_dict(orient='records')"""
             if d["name"] == "knee_points":
                 d["values"] = kp_list
-            
+
+        combined = combined.to_dataframe().reset_index()
+        combined = combined.drop('id', axis=1)
         csv_string_alpha = combined.to_csv(index=True)
-        print("combined:", combined.head())
-        print("combined:", combined)
+       
     else:
         spec = {"warning": "Warning! No alpha metric was specified!"}
         csv_string_alpha = ""
 
-    
     vega_json = json.dumps(spec)
     vega_json2 = json.dumps(spec_beta)
-
-    
 
     tabbed_context = {
         "tabs": [
@@ -614,25 +609,12 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         "vega_json2": vega_json2,
         "beta_metric": str(metric),
         "algorithm": str(algorithm),
-        "knee_point": (knee_point),
         "alpha": alpha,
         "beta": beta,
-        "percent_samples_100": json.dumps(float(percent_samples_100)),
-        "depth_threshold": json.dumps(int(depth_threshold)),
-        "percentile": json.dumps(float(percentile)),
-        "lower_percentile": json.dumps(float(lower_percentile)),
-        "upper_percentile": json.dumps(float(upper_percentile)),
-        "lower_value": json.dumps(float(lower_value)),
-        "upper_value": json.dumps(float(upper_value)),
-        "graph_data": graph_data,
-        "graph_name": graph_name,
-        "max_read_percentile": json.dumps(int(max_read_percentile)),
         "csv_data_alpha": csv_string_alpha,
-        "csv_data_beta": csv_string_beta,  # Assuming you have a similar variable for beta data
+        "csv_data_beta": csv_string_beta, 
     }
-    
-    #templates = os.path.join(TEMPLATES, 'index.html')
-    # new version with tabs
+
     templates = [
         os.path.join(TEMPLATES, 'index.html'),
         os.path.join(TEMPLATES, 'stats.html')
