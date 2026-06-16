@@ -3,6 +3,7 @@
   "autosize": {"type": "fit-x", "contains": "padding"},
   "width": 900,
   "height": 400,
+  "padding": { "left": 10, "bottom": 10, "right": 40}, 
   "signals": [
     {
       "name": "groupField",
@@ -29,10 +30,33 @@
     {
       "name": "x_axis_title",
       "value": "Sequencing Depth" 
+    },
+    {
+      "name": "hidden_groups",
+      "value": ",",
+      "on": [
+        {
+          "events": "@group_legend_symbols:click, @group_legend_labels:click",
+          "update": "indexof(hidden_groups, ',' + datum.value + ',') >= 0 ? replace(hidden_groups, ',' + datum.value + ',', ',') : hidden_groups + datum.value + ','"
+        },
+        {
+          "events": {"signal": "groupField"},
+          "update": "','"
+        }
+      ]
     }
   ],
   "data": [
     {"name": "raw", "values": []},
+    {
+      "name": "legend_groups",
+      "source": "raw",
+      "transform": [
+        {"type": "formula", "as": "group", "expr": "groupField ? datum[groupField] : datum.sample"},
+        {"type": "filter", "expr": "datum.group != null"},
+        {"type": "aggregate", "groupby": ["group"]}
+      ]
+    },
     {
       "name": "raw_filtered",
       "source": "raw",
@@ -46,6 +70,7 @@
       "name": "stats",
       "source": "raw_filtered",
       "transform": [
+        {"type": "filter", "expr": "indexof(hidden_groups, ',' + datum.group + ',') < 0"},
         {
           "type": "aggregate",
           "groupby": ["group", "read_depth"],
@@ -68,7 +93,8 @@
       "transform": [
         {"type": "flatten", "fields": ["all_depths"], "as": ["depth"]},
         {"type": "formula", "as": "group", "expr": "datum[groupField]"},
-        {"type": "filter", "expr": "datum.reads >= datum.depth"}
+        {"type": "filter", "expr": "datum.reads >= datum.depth"},
+        {"type": "filter", "expr": "indexof(hidden_groups, ',' + datum.group + ',') < 0"}
       ]
     },
     {
@@ -88,7 +114,11 @@
     {
       "name": "color",
       "type": "ordinal",
-      "domain": {"data": "raw_filtered", "field": "group"},
+      "domain": {
+        "data": "legend_groups", 
+        "field": "group",
+        "sort": {"field": "group", "op": "min"}
+      },
       "range": {"scheme": "category10"}
     }
   ],
@@ -99,7 +129,7 @@
       "encode": {
         "enter": {
           "x": {"value": 5},
-          "y": {"value": 50},
+          "y": {"value": 15},
           "height": {"value": 400}
         },
         "update": {
@@ -146,7 +176,7 @@
             "update": {
               "x": {"scale": "x1", "field": "read_depth"},
               "y": {"scale": "y1", "field": "min"},
-              "y2": {"scale": "y1", "field": "max"},
+              "y2": {"scale": "y1", "max": null, "field": "max"},
               "stroke": {"scale": "color", "field": "group"}
             }
           }
@@ -195,7 +225,7 @@
       "encode": {
         "enter": {
           "x": {"value": 5},
-          "y": {"value": 575},
+          "y": {"value": 525},
           "height": {"value": 400}
         },
         "update": {
@@ -267,9 +297,29 @@
       "fill": "color",
       "title": "Legend",
       "orient": "right",
+      "legendY": 50,
+      "columns": 1,
+      "symbolLimit": 1000,
+      "labelLimit": 340,
+      "minExtent": 400,
+      "maxExtent": 400,
       "encode": {
-        "symbols": {"update": {"size": {"value": 100}}},
-        "labels": {"update": {"fontSize": {"value": 12}}}
+        "symbols": {
+          "name": "group_legend_symbols",
+          "interactive": true,
+          "update": {
+            "size": {"value": 100},
+            "opacity": {"signal": "indexof(hidden_groups, ',' + datum.value + ',') >= 0 ? 0.2 : 1"}
+          }
+        },
+        "labels": {
+          "name": "group_legend_labels",
+          "interactive": true,
+          "update": {
+            "fontSize": {"value": 12},
+            "opacity": {"signal": "indexof(hidden_groups, ',' + datum.value + ',') >= 0 ? 0.4 : 1"}
+          }
+        }
       }
     }
   ],

@@ -79,15 +79,18 @@
       </div>
       <div class="modal-body">
         <p>
-            The Rarefaction Curves plot on top shows the chosen alpha diversity metric from the dropdown menu
+            The Rarefaction Curves plot on top shows the chosen alpha diversity metric (from the dropdown menu)
             at each depth for every sample as a curve. Change it to see a different metric.
             Change the grouping of the data with the 'group by' dropdown menu.<br>
             The optimal rarefaction depth is depicted as the vertical red line. 
             It is the knee point that was calculated using the {{ algorithm }} algorithm.
         </p>
         <p>
-            The lower plot shows the number of samples which have a certain number of reads. This shows how many samples were
-            included at each read depth in the upper plot. 
+            The lower plot shows the number of samples which have enough reads to be included at that depth, and were used to calculate the 
+            curve in the upper plot. This is important to consider when choosing a rarefaction depth, as a very high depth may lead to very few samples being included in the analysis.
+        </p>
+        <p>
+            Click the ⬇ Download CSV button to download a CSV file with the data used to create the plots. This includes the alpha diversity values for each sample at each depth, as well as their metadata. 
         </p>
       </div>
       <div class="modal-footer">
@@ -99,9 +102,7 @@
 
   <script id="vega_json" type="application/json">
     {{
-        vega_json
-        |
-        safe
+        vega_json | safe
     }}
   </script>
 

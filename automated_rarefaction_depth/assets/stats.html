@@ -52,7 +52,7 @@
                             ⬇ Download CSV
                         </button>
                         <button type="button" class="btn btn-outline-info" id="openHelpBtn">
-                            <strong>?</strong> Help & Info
+                            <strong>?</strong>&nbsp;Help & Info
                         </button>
                     </div>
                     <div class="col-lg-12" id="plots_summary"> 
@@ -89,6 +89,9 @@
             It is the knee point that was calculated using the {{ algorithm }} algorithm.<br>
             The lower plot shows the number of samples that had enough reads to be included at the respecive read depth.
         </p>
+        <p>
+            Click the ⬇ Download CSV button to download a CSV file with the points used to create the rarefaction curve. 
+         </p>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -100,9 +103,7 @@
 
   <script id="vega_json2" type="application/json">
     {{
-        vega_json2
-        |
-        safe
+        vega_json2 | safe
     }}
   </script>
 
