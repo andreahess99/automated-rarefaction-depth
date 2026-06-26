@@ -98,10 +98,8 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     if any(m in ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao', 'canberra_adkins',
                          'sokalmichener', 'sokalsneath', 'yule', 'correlation', 'cosine', 'aitchison',  'canberra'] for m in metrics):
         beta = True
-        print("Beta", beta)
         metrics_beta = [m for m in metrics if m in ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao',
                          'sokalmichener', 'sokalsneath', 'yule', 'canberra_adkins', 'correlation', 'cosine', 'aitchison',  'canberra']]
-        print("metrics beta:", metrics_beta)
     else:
             metrics_beta = []
             kp_list_beta = None
@@ -112,7 +110,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     if any(m not in metrics_beta for m in metrics):
         alpha = True 
         metrics_alpha = [m for m in metrics if m not in metrics_beta]
-        print("metrics alpha:", metrics_alpha)
 
     meta = meta_data.to_dataframe()
     meta.index.name = "sample"
@@ -219,7 +216,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
                 
             kpb = knee_point_locator(avg_range[1:], clean_avg_diff[1:], algorithm, "convex", "decreasing")
-            print("knee point for metric", metric, ":", kpb)
             kpb = round(float(kpb)) if kpb is not None else 0
             knee_points_beta.append(pd.DataFrame({'knee': kpb, 'metric': metric}, index=[0]))
             print("knee_points_beta:", knee_points_beta)
@@ -602,8 +598,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
 
     tabbed_context = {
         "tabs": [
-            {"title": "Alpha Diversity", "url": "index.html"},
-            {"title": "Beta Diversity", "url": "stats.html"},
+            {"title": "Alpha Rarefaction", "url": "index.html"},
+            {"title": "Beta Rarefaction", "url": "stats.html"},
         ],
         "vega_json": vega_json,
         "vega_json2": vega_json2,

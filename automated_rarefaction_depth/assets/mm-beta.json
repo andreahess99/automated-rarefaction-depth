@@ -159,7 +159,7 @@
         }
       ],
       "axes": [
-        {"scale": "x2", "orient": "bottom", "title": "Read Depth"},
+        {"scale": "x2", "orient": "bottom", "title": "Sequencing Depth"},
         {"scale": "y2", "orient": "left", "title": "Number of Samples"}
       ],
       "marks": [

@@ -42,8 +42,16 @@
         {
           "events": {"signal": "groupField"},
           "update": "','"
+        },
+        {
+          "events": "@select_all_btn:click",
+          "update": "toggle_all_state ? ',' + join(pluck(data('legend_groups'), 'group'), ',') + ',' : ','"
         }
       ]
+    },
+    {
+      "name": "toggle_all_state",
+      "update": "length(split(hidden_groups, ',')) - 2 < length(data('legend_groups'))"
     }
   ],
   "data": [
@@ -249,7 +257,7 @@
         }
       ],
       "axes": [
-        {"scale": "x2", "orient": "bottom", "title": "Read Depth"},
+        {"scale": "x2", "orient": "bottom", "title": {"signal": "x_axis_title"}},
         {"scale": "y2", "orient": "left", "title": "Number of Samples"}
       ],
       "marks": [
@@ -290,6 +298,30 @@
           ]
         }
       ]
+    },
+    {
+      "type": "text",
+      "name": "select_all_btn",
+      "interactive": true,
+      "encode": {
+        "enter": {
+          "font": {"value": "system-ui, -apple-system, sans-serif"},
+          "fontSize": {"value": 12},
+          "fontWeight": {"value": "bold"},
+          "align": {"value": "left"},
+          "baseline": {"value": "top"},
+          "cursor": {"value": "pointer"}
+        },
+        "update": {
+          "x": {"signal": "width", "offset": 70},
+          "y": {"value": -20},
+          "text": {"signal": "toggle_all_state ? '☐ Deselect All Samples' : '☑ Select All Samples'"},
+          "fill": {"signal": "toggle_all_state ? '#007bff' : '#6c757d'"}
+        },
+        "hover": {
+          "fill": {"value": "#0056b3"}
+        }
+      }
     }
   ],
   "legends": [
@@ -297,10 +329,10 @@
       "fill": "color",
       "title": "Legend",
       "orient": "right",
-      "legendY": 50,
+      "legendY": 15,
       "columns": 1,
       "symbolLimit": 1000,
-      "labelLimit": 340,
+      "labelLimit": 100,
       "minExtent": 400,
       "maxExtent": 400,
       "encode": {
@@ -333,7 +365,8 @@
     },
     "legend": {
       "titleFontSize": 16,
-      "labelFontSize": 14
+      "labelFontSize": 14,
+      "offset": 50
     }
   }
 }

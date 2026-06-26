@@ -36,23 +36,17 @@
   <div class="row">
     <div class="col-lg-12">
         <div class="card">
-            <h5 class="card-header">Automated Rarefaction Depth Summary</h5>
+            <!--<h5 class="card-header">Automated Rarefaction Depth Summary</h5>-->
             <div class="card-body">
                 {% if alpha is sameas true %}
                     <div class="toolbar-container">
                         <div id="vega-bindings-container"></div>
                         <span id="knee-point-display" class="knee-point-box">Knee point: —</span>
-                        <!--<button type="button" class="btn btn-outline-secondary btn-sm" id="downloadBtn">
-                            ⬇ Download CSV
-                        </button>
-                        <button type="button" class="btn btn-outline-info btn-sm" id="openHelpBtn">
-                            <strong>?</strong> Help & Info
-                        </button>-->
                         <button type="button" class="btn btn-outline-secondary" id="downloadBtn">
                             ⬇ Download CSV
                         </button>
                         <button type="button" class="btn btn-outline-info" id="openHelpBtn">
-                            <strong>?</strong> Help & Info
+                            <strong>?</strong>&nbsp;Help & Info
                         </button>
                     </div>
                     <div class="col-lg-12" id="plots_summary"></div>
@@ -81,13 +75,19 @@
         <p>
             The Rarefaction Curves plot on top shows the chosen alpha diversity metric (from the dropdown menu)
             at each depth for every sample as a curve. Change it to see a different metric.
-            Change the grouping of the data with the 'group by' dropdown menu.<br>
+            Change the grouping of the data with the 'group by' dropdown menu.
+        </p>
+        <p>
             The optimal rarefaction depth is depicted as the vertical red line. 
-            It is the knee point that was calculated using the {{ algorithm }} algorithm.
+            It is the knee point that was calculated using the <strong>{{ algorithm }} algorithm</strong>.
         </p>
         <p>
             The lower plot shows the number of samples which have enough reads to be included at that depth, and were used to calculate the 
             curve in the upper plot. This is important to consider when choosing a rarefaction depth, as a very high depth may lead to very few samples being included in the analysis.
+        </p>
+        <p>
+            Select / Deselect all samples with the checkbox above the legend. You can also click on individual samples in the legend to select/deselect them. Only
+            the currently selected samples will be shown in the plots.
         </p>
         <p>
             Click the ⬇ Download CSV button to download a CSV file with the data used to create the plots. This includes the alpha diversity values for each sample at each depth, as well as their metadata. 
