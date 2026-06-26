@@ -8,6 +8,10 @@
 
 import json
 import os
+import shutil
+from xxlimited import Str
+import tempfile, zipfile
+from importlib_metadata import metadata
 import numpy as np
 import pandas as pd
 import qiime2
@@ -18,8 +22,7 @@ import altair as alt
 from shutil import copytree
 import warnings
 from skbio import DistanceMatrix
-#import time
-#import matplotlib.pyplot as plt
+
 
 
 """def altair_theme():
@@ -113,8 +116,14 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
 
     meta = meta_data.to_dataframe()
     meta.index.name = "sample"
+    # find all numeric metadata columns
+    numeric_columns = meta.select_dtypes(include=[np.number]).columns.tolist()
+    meta = meta.drop(columns=numeric_columns)
     metadata_columns = ["sample"] + meta.columns.tolist()
+    print("metadata_columns:", metadata_columns)
+    print("numeric_columns:", numeric_columns)
     
+   
     print(metrics)
     metric = list(metrics)[0] #for now just take the first metric in the set, so I don't get errors from my beta code
     
@@ -166,168 +175,185 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     clean_max_range = [float(x) for x in max_range]
 
     # beta metric specific code
-    if beta:
-        knee_points_beta = []
-        data_beta = []
-        for k, metric in enumerate(metrics_beta):
-            print("metric:", metric)
-            num_samples_left = [None] * (steps)
-            avg_difference = [None] * (steps-1)
-            median_difference = [None] * (steps-1)
-            std_difference = [None] * (steps-1)
-            p75_25_difference = [None] * (steps-1)
-            avg_range = [None] * (steps-1)
-            #workaround as call fails for sampling_depth=1
-            #max_range[0] = 1
-            for i in range(steps):
-                print(f"step {i+1}: {max_range[i]}")
-                #beta_result, = beta_action(table=table, sampling_depth=1, metric=metric, n=iterations, replacement=False)
-                beta_result, = beta_action(table=table, sampling_depth=(int(max_range[i])), metric=metric, n=iterations, replacement=False)
-                if k == 0:
-                    num_samples_left[i] = beta_result.view(DistanceMatrix).shape[0] 
-
-                if i > 0:
-                    # reduce old_beta_result to only the ids present in the current beta_result
-                    old_dm_full = old_beta_result.view(DistanceMatrix)
-                    new_ids = list(beta_result.view(DistanceMatrix).ids)
-                    common_ids = [sid for sid in old_dm_full.ids if sid in new_ids]
-
-                    if common_ids:
-                        idxs = [old_dm_full.ids.index(sid) for sid in common_ids]
-                        subdata = old_dm_full.data[np.ix_(idxs, idxs)]
-                        old_dm = DistanceMatrix(subdata, ids=common_ids)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        beta_artifact_paths = []
+        if beta:
+            knee_points_beta = []
+            data_beta = []
+            beta_matrices_dict = {}
+            for k, metric in enumerate(metrics_beta):
+                print("metric:", metric)
+                num_samples_left = [None] * (steps)
+                avg_difference = [None] * (steps-1)
+                median_difference = [None] * (steps-1)
+                std_difference = [None] * (steps-1)
+                p75_25_difference = [None] * (steps-1)
+                avg_range = [None] * (steps-1)
+                #workaround as call fails for sampling_depth=1
+                #max_range[0] = 1
+                for i in range(steps):
+                    print(f"step {i+1}: {max_range[i]}")
+                    #beta_result, = beta_action(table=table, sampling_depth=1, metric=metric, n=iterations, replacement=False)
+                    beta_result, = beta_action(table=table, sampling_depth=(int(max_range[i])), metric=metric, n=iterations, replacement=False)
                 
-                    new_dm = beta_result.view(DistanceMatrix)
-                    difference = np.abs(new_dm.data - old_dm.data)
+                    # saving the beta_result file
+                    filename = f"distance_matrix_{metric}_depth_{int(max_range[i])}.qza"
+                    file_path = os.path.join(temp_dir, filename)
+                    beta_result.save(file_path)
+                    beta_artifact_paths.append(file_path)
+
+                    if k == 0:
+                        num_samples_left[i] = beta_result.view(DistanceMatrix).shape[0] 
+
+                    if i > 0:
+                        # reduce old_beta_result to only the ids present in the current beta_result
+                        old_dm_full = old_beta_result.view(DistanceMatrix)
+                        new_ids = list(beta_result.view(DistanceMatrix).ids)
+                        common_ids = [sid for sid in old_dm_full.ids if sid in new_ids]
+
+                        if common_ids:
+                            idxs = [old_dm_full.ids.index(sid) for sid in common_ids]
+                            subdata = old_dm_full.data[np.ix_(idxs, idxs)]
+                            old_dm = DistanceMatrix(subdata, ids=common_ids)
                     
-                    avg_difference[i-1] = np.mean(difference[np.triu_indices_from(difference, k=1)])
-                    median_difference[i-1] = np.median(difference[np.triu_indices_from(difference, k=1)])
-                    std_difference[i-1] = np.std(difference[np.triu_indices_from(difference, k=1)])
-                    p75_25_difference[i-1] = np.percentile(difference[np.triu_indices_from(difference, k=1)], 75) - np.percentile(difference[np.triu_indices_from(difference, k=1)], 25)
+                        new_dm = beta_result.view(DistanceMatrix)
+                        difference = np.abs(new_dm.data - old_dm.data)
+                        
+                        avg_difference[i-1] = np.mean(difference[np.triu_indices_from(difference, k=1)])
+                        median_difference[i-1] = np.median(difference[np.triu_indices_from(difference, k=1)])
+                        std_difference[i-1] = np.std(difference[np.triu_indices_from(difference, k=1)])
+                        p75_25_difference[i-1] = np.percentile(difference[np.triu_indices_from(difference, k=1)], 75) - np.percentile(difference[np.triu_indices_from(difference, k=1)], 25)
 
-                    avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
-                
-                old_beta_result = beta_result
-
-            clean_avg_diff = [float(x) if x is not None else 0.0 for x in avg_difference]
-            data_beta.append(pd.DataFrame({'metric': metric, 'depth': avg_range[1:], 'observed': clean_avg_diff[1:]}))
-            if k==0:
-                #clean_samples_left = [int(x) for x in num_samples_left]
-                df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
-                
-            kpb = knee_point_locator(avg_range[1:], clean_avg_diff[1:], algorithm, "convex", "decreasing")
-            kpb = round(float(kpb)) if kpb is not None else 0
-            knee_points_beta.append(pd.DataFrame({'knee': kpb, 'metric': metric}, index=[0]))
-            print("knee_points_beta:", knee_points_beta)
-
-
-        data_beta = pd.concat(data_beta, ignore_index=True)
-        data_beta.columns = ['metric', 'depth', 'observed']
-        data_beta.insert(0, 'id', [f"row{i}" for i in range(len(data_beta))])
-        
-        data_beta = data_beta.set_index('id')
-        data_beta = qiime2.Metadata(data_beta)
-
-        kp_beta = pd.concat(knee_points_beta, ignore_index=True)
-        kp_beta.columns = ['knee', 'metric']
-        kp_beta.insert(0, 'id', [f"row{i}" for i in range(len(kp_beta))])
-        kp_beta = kp_beta.set_index('id')
-        kp_beta.index = kp_beta.index.astype(str)
-        kp_list_beta = qiime2.Metadata(kp_beta)
-        df_bars.insert(0, 'id', [f"row{i}" for i in range(len(df_bars))])
-        df_bars = df_bars.set_index('id')
-        num_samples = qiime2.Metadata(df_bars)
-        #visualization, = viz_combined_action(max_range=clean_max_range, kmer_run=kmer_run, metric=metric, algorithm=algorithm, num_samples=num_samples, data_beta=data_beta, kp_list_beta=kp_list_beta, beta_metrics=metrics_beta)
-    else:
-        metrics_beta = None
-    
-    if alpha:
-        #if alpha metric was chosen
-        #dfs = []
-        combined_dfs = []
-        knee_point_list = []
-
-        for metric in metrics_alpha:
-            print("metric:", metric)
-            dfs = []
-            for i in range(steps):
-                print(f"step {i+1}: {max_range[i]}")
-                """result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
-                artifacts_list.append(result)"""
-
-                #function to use if we want to get the data for each iteration and sample instead of just the average
-                #and then combine it into a dataframe to use for the visualization and knee point calculation
-                sample_data, = alpha_collection_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False)
-                for key, artifact in sample_data.items():
-                    series = artifact.view(pd.Series)
-                    df = series.reset_index()
-                    df.columns = ['sample', 'observed']
-                    df['iteration'] = key
-                    df['read_depth'] = int(max_range[i])  
-                    df['metric'] = metric
-                    dfs.append(df)
+                        avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
                     
-                combined = pd.concat(dfs, ignore_index=True)
+                    old_beta_result = beta_result
 
-                # Calculate average after collecting all iterations for this depth
-                #making the mean_df which I would need for the knee point calculation
-                mean_df = (combined.groupby(['sample', 'read_depth'], as_index=False).agg(mean_observed=('observed', 'mean')))
+                clean_avg_diff = [float(x) if x is not None else 0.0 for x in avg_difference]
+                data_beta.append(pd.DataFrame({'metric': metric, 'depth': avg_range[1:], 'observed': clean_avg_diff[1:]}))
+                if k==0:
+                    #clean_samples_left = [int(x) for x in num_samples_left]
+                    df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
+                    
+                kpb = knee_point_locator(avg_range[1:], clean_avg_diff[1:], algorithm, "convex", "decreasing")
+                kpb = round(float(kpb)) if kpb is not None else 0
+                knee_points_beta.append(pd.DataFrame({'knee': kpb, 'metric': metric}, index=[0]))
+                print("knee_points_beta:", knee_points_beta)
+
+
+            data_beta = pd.concat(data_beta, ignore_index=True)
+            data_beta.columns = ['metric', 'depth', 'observed']
+            data_beta.insert(0, 'id', [f"row{i}" for i in range(len(data_beta))])
             
-            meta.fillna(0, inplace=True)
-            combined = combined.merge(meta, left_on="sample", right_index=True, how="left")
+            data_beta = data_beta.set_index('id')
+            data_beta = qiime2.Metadata(data_beta)
 
-            combined_dfs.append(combined)
-            #calculatin knee point here as data formats are a bit different
-            if metric in ['observed_features', 'shannon', 'simpson', 'brillouin_d', 'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit']:
-                curve_type = "concave"
-                direction = "increasing"
-            elif metric in ['dominance', 'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'jaccard', 'braycurtis']:
-                curve_type = "convex"
-                direction = "decreasing"
-            knee_points = [None] * len(sample_list)
-            for i, sample in enumerate(sample_list):
-                array_sample = mean_df[mean_df['sample'] == sample]['mean_observed'].values
-                max_range_for_sample = max_range[:len(array_sample)]
-                knee_points[i] = knee_point_locator(max_range_for_sample, array_sample, algorithm, curve_type, direction)
+            kp_beta = pd.concat(knee_points_beta, ignore_index=True)
+            kp_beta.columns = ['knee', 'metric']
+            kp_beta.insert(0, 'id', [f"row{i}" for i in range(len(kp_beta))])
+            kp_beta = kp_beta.set_index('id')
+            kp_beta.index = kp_beta.index.astype(str)
+            kp_list_beta = qiime2.Metadata(kp_beta)
+            df_bars.insert(0, 'id', [f"row{i}" for i in range(len(df_bars))])
+            df_bars = df_bars.set_index('id')
+            num_samples = qiime2.Metadata(df_bars)
+
+            # make the beta artifacts zip file
+            temp_zip_path = os.path.join(temp_dir, 'beta_matrices.zip')
+            with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for file_path in beta_artifact_paths:
+                    zipf.write(file_path, arcname=os.path.basename(file_path))
+            #visualization, = viz_combined_action(max_range=clean_max_range, kmer_run=kmer_run, metric=metric, algorithm=algorithm, num_samples=num_samples, data_beta=data_beta, kp_list_beta=kp_list_beta, beta_metrics=metrics_beta)
+        else:
+            metrics_beta = None
+        
+        if alpha:
+            #if alpha metric was chosen
+            #dfs = []
+            combined_dfs = []
+            knee_point_list = []
+
+            for metric in metrics_alpha:
+                print("metric:", metric)
+                dfs = []
+                for i in range(steps):
+                    print(f"step {i+1}: {max_range[i]}")
+                    """result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
+                    artifacts_list.append(result)"""
+
+                    #function to use if we want to get the data for each iteration and sample instead of just the average
+                    #and then combine it into a dataframe to use for the visualization and knee point calculation
+                    sample_data, = alpha_collection_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False)
+                    for key, artifact in sample_data.items():
+                        series = artifact.view(pd.Series)
+                        df = series.reset_index()
+                        df.columns = ['sample', 'observed']
+                        df['iteration'] = key
+                        df['read_depth'] = int(max_range[i])  
+                        df['metric'] = metric
+                        dfs.append(df)
+                        
+                    combined = pd.concat(dfs, ignore_index=True)
+
+                    # Calculate average after collecting all iterations for this depth
+                    #making the mean_df which I would need for the knee point calculation
+                    mean_df = (combined.groupby(['sample', 'read_depth'], as_index=False).agg(mean_observed=('observed', 'mean')))
                 
-        
-            knee_points_filtered = [point for point in knee_points if point is not None] 
-            knee_point = round(np.mean(knee_points_filtered))
-            print("calculated rarefaction depth:")
-            print(knee_point)
-            knee_point_list.append((knee_point, metric))
+                meta.fillna(0, inplace=True)
+                combined = combined.merge(meta, left_on="sample", right_index=True, how="left")
 
-    
-        combined_df = mean_df.pivot(index='sample', columns='read_depth', values='mean_observed').reset_index()
-        combined_df = combined_df.drop(combined_df.columns[-1], axis=1)
-        combined_df.index = combined_df.index.astype(str)
-    
-        percent_samples_100 = round(percent_samples * 100, 2)
- 
-        combined = pd.concat(combined_dfs, ignore_index=True)
-        combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
-        combined = combined.set_index('id')
-        combined = qiime2.Metadata(combined)
-        
-        kp_df = pd.DataFrame(knee_point_list, columns=['knee', 'metric'])
-        kp_df.index.name = 'id'
-        kp_df.index = kp_df.index.astype(str)
-        knee_point_list = qiime2.Metadata(kp_df)
-        metrics = list(metrics)
-    else:
-        combined = None
-        knee_point_list = None
-        percent_samples_100 = float(percent_samples * 100)
-        sorted_depths_pass = None
-        metrics_alpha = None
-        knee_point = 0
-        
-    visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, steps=steps, algorithm=algorithm,
-                        sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, 
-                        combined=combined, metadata_columns=metadata_columns, rps=qiime2.Metadata(reads_per_sample_merged), kp_list=knee_point_list,
-                        kp_list_beta=kp_list_beta, data_beta=data_beta, alpha_metrics=metrics_alpha, beta_metrics=metrics_beta, num_samples=num_samples, max_range=clean_max_range) 
+                combined_dfs.append(combined)
+                #calculatin knee point here as data formats are a bit different
+                if metric in ['observed_features', 'shannon', 'simpson', 'brillouin_d', 'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit']:
+                    curve_type = "concave"
+                    direction = "increasing"
+                elif metric in ['dominance', 'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'jaccard', 'braycurtis']:
+                    curve_type = "convex"
+                    direction = "decreasing"
+                knee_points = [None] * len(sample_list)
+                for i, sample in enumerate(sample_list):
+                    array_sample = mean_df[mean_df['sample'] == sample]['mean_observed'].values
+                    max_range_for_sample = max_range[:len(array_sample)]
+                    knee_points[i] = knee_point_locator(max_range_for_sample, array_sample, algorithm, curve_type, direction)
+                    
+            
+                knee_points_filtered = [point for point in knee_points if point is not None] 
+                knee_point = round(np.mean(knee_points_filtered))
+                print("calculated rarefaction depth:")
+                print(knee_point)
+                knee_point_list.append((knee_point, metric))
 
-    return visualization
+        
+            combined_df = mean_df.pivot(index='sample', columns='read_depth', values='mean_observed').reset_index()
+            combined_df = combined_df.drop(combined_df.columns[-1], axis=1)
+            combined_df.index = combined_df.index.astype(str)
+        
+            percent_samples_100 = round(percent_samples * 100, 2)
+    
+            combined = pd.concat(combined_dfs, ignore_index=True)
+            combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
+            combined = combined.set_index('id')
+            combined = qiime2.Metadata(combined)
+            
+            kp_df = pd.DataFrame(knee_point_list, columns=['knee', 'metric'])
+            kp_df.index.name = 'id'
+            kp_df.index = kp_df.index.astype(str)
+            knee_point_list = qiime2.Metadata(kp_df)
+            metrics = list(metrics)
+        else:
+            combined = None
+            knee_point_list = None
+            percent_samples_100 = float(percent_samples * 100)
+            sorted_depths_pass = None
+            metrics_alpha = None
+            knee_point = 0
+            
+        visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, steps=steps, algorithm=algorithm,
+                            sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, 
+                            combined=combined, metadata_columns=metadata_columns, rps=qiime2.Metadata(reads_per_sample_merged), kp_list=knee_point_list,
+                            kp_list_beta=kp_list_beta, data_beta=data_beta, alpha_metrics=metrics_alpha, beta_metrics=metrics_beta, num_samples=num_samples, max_range=clean_max_range,
+                            numeric_columns=numeric_columns, beta_zip_path=temp_zip_path) 
+
+        return visualization
 
 #calculates the knee point based on the chosen algorithm & metric
 def knee_point_locator(range: list[float], samples: list[float], algorithm: str, curve_type:str, direction:str) -> float:
@@ -462,25 +488,22 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
 # to do: add some text somewhere if kmer was run?
 def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, algorithm: str = "kneedle", num_samples: qiime2.Metadata = None, steps: int = None, 
                   percent_samples_100: float = 0, sorted_depths: list[int] = None, max_reads: int = 1, depth_threshold: int = 1, knee_point: int = 0, max_read_percentile: int = 1,
-                  metadata_columns: list[str] = None, combined: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None,
-                  kp_list_beta: qiime2.Metadata = None, data_beta: qiime2.Metadata = None, alpha_metrics: list[str] = None, beta_metrics: list[str] = None)->None:  
+                  metadata_columns: list[str] = None, combined: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None, beta_zip_path: Str = None,
+                  kp_list_beta: qiime2.Metadata = None, data_beta: qiime2.Metadata = None, alpha_metrics: list[str] = None, beta_metrics: list[str] = None, numeric_columns: list[str] = None)->None:  
     
     #default values for the tabbed_context
-    percentile = 0
-    lower_percentile = 0
-    upper_percentile = 0
-    lower_value = 0
-    upper_value = 0
-    graph_data = str(metric)
-    graph_name = str(metric)
     beta = False
     alpha = False
 
+    #test
+    """if beta_zip_path and os.path.exists(beta_zip_path):
+        destination = os.path.join(output_dir, 'beta_matrices.zip')
+        shutil.copy(beta_zip_path, destination)"""
+    
 
     # beta metric specific code
     if beta_metrics is not None and len(beta_metrics) > 0:
         beta = True
-        #line_plot_title = 'Beta Rarefaction Curve'
 
         line_chart_df = data_beta.to_dataframe().reset_index()
         line_chart_df = line_chart_df.drop('id', axis=1)
@@ -555,6 +578,19 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     else:
         spec_beta = {"warning": "Warning! No beta metric was specified!"}
         csv_string_beta = ""
+    #test
+    """if beta_zip_path and os.path.exists(beta_zip_path):
+        destination = os.path.join(output_dir, 'beta_matrices.zip')
+        shutil.copy(beta_zip_path, destination)
+        with zipfile.ZipFile(destination, 'a', zipfile.ZIP_DEFLATED) as zipf:
+            csv_content = csv_string_beta
+            if not isinstance(csv_content, str):
+                if hasattr(csv_content, 'to_csv'):
+                    csv_content = csv_content.to_csv(index=False)
+                else:
+                    csv_content = str(csv_content)
+            zipf.writestr('rarefaction_data_beta.csv', csv_content)"""
+        
 
     if alpha:
         with open(os.path.join(TEMPLATES, "mm_alpha_div.json")) as f:
@@ -608,7 +644,8 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         "alpha": alpha,
         "beta": beta,
         "csv_data_alpha": csv_string_alpha,
-        "csv_data_beta": csv_string_beta, 
+        "csv_data_beta": csv_string_beta,
+        "removed_numeric_columns": numeric_columns,
     }
 
     templates = [

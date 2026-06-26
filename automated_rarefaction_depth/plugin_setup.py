@@ -8,9 +8,10 @@
 
 import automated_rarefaction_depth
 from qiime2.plugin import (Plugin, Str, Choices, Int, Bool, Range, Float, List,
-                            Set, Visualization, Metadata, Citations)
+                            Set, Visualization, Metadata, Citations, Collection)
 from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.feature_data import FeatureData, Sequence
+from q2_types.distance_matrix import DistanceMatrix
 from automated_rarefaction_depth import __version__
 from automated_rarefaction_depth._boots_pipeline import pipeline_boots, _rf_visualizer_boots,  _combined_viz #_beta_viz,
 
@@ -201,7 +202,9 @@ plugin.visualizers.register_function(
                 'kp_list': Metadata,
                 'data_beta': Metadata,
                 'kp_list_beta': Metadata,
-                'beta_metrics': List[Str]
+                'beta_metrics': List[Str],
+                'numeric_columns': List[Str],
+                'beta_zip_path': Str
                 },
     input_descriptions={},
     parameter_descriptions={
