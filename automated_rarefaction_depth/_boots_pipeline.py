@@ -175,6 +175,8 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
     clean_max_range = [float(x) for x in max_range]
 
+    temp_zip_path = None #just to make sure it's defined if beta is not run
+
     # beta metric specific code
     with tempfile.TemporaryDirectory() as temp_dir:
         beta_artifact_paths = []
@@ -269,7 +271,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         if alpha:
             #if alpha metric was chosen
             #dfs = []
-            temp_zip_path = None #just to make sure it's defined if beta is not run
             combined_dfs = []
             knee_point_list = []
 
