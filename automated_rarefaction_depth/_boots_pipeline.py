@@ -8,6 +8,7 @@
 
 import json
 import os
+import base64 
 import shutil
 from xxlimited import Str
 import tempfile, zipfile
@@ -180,7 +181,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         if beta:
             knee_points_beta = []
             data_beta = []
-            beta_matrices_dict = {}
             for k, metric in enumerate(metrics_beta):
                 print("metric:", metric)
                 num_samples_left = [None] * (steps)
@@ -269,6 +269,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         if alpha:
             #if alpha metric was chosen
             #dfs = []
+            temp_zip_path = None #just to make sure it's defined if beta is not run
             combined_dfs = []
             knee_point_list = []
 
@@ -495,12 +496,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     beta = False
     alpha = False
 
-    #test
-    """if beta_zip_path and os.path.exists(beta_zip_path):
-        destination = os.path.join(output_dir, 'beta_matrices.zip')
-        shutil.copy(beta_zip_path, destination)"""
-    
-
     # beta metric specific code
     if beta_metrics is not None and len(beta_metrics) > 0:
         beta = True
@@ -578,18 +573,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     else:
         spec_beta = {"warning": "Warning! No beta metric was specified!"}
         csv_string_beta = ""
-    #test
-    """if beta_zip_path and os.path.exists(beta_zip_path):
-        destination = os.path.join(output_dir, 'beta_matrices.zip')
-        shutil.copy(beta_zip_path, destination)
-        with zipfile.ZipFile(destination, 'a', zipfile.ZIP_DEFLATED) as zipf:
-            csv_content = csv_string_beta
-            if not isinstance(csv_content, str):
-                if hasattr(csv_content, 'to_csv'):
-                    csv_content = csv_content.to_csv(index=False)
-                else:
-                    csv_content = str(csv_content)
-            zipf.writestr('rarefaction_data_beta.csv', csv_content)"""
         
 
     if alpha:
@@ -632,6 +615,15 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
     vega_json = json.dumps(spec)
     vega_json2 = json.dumps(spec_beta)
 
+    #processing the distance matrix zip file
+    beta_zip_base64 = ""
+    if beta_zip_path and os.path.exists(beta_zip_path):
+        destination = os.path.join(output_dir, 'beta_matrices.zip')
+        shutil.copy(beta_zip_path, destination)
+        with open(beta_zip_path, "rb") as zip_file:
+            encoded_bytes = base64.b64encode(zip_file.read())
+            beta_zip_base64 = encoded_bytes.decode('utf-8')
+
     tabbed_context = {
         "tabs": [
             {"title": "Alpha Rarefaction", "url": "index.html"},
@@ -646,6 +638,7 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         "csv_data_alpha": csv_string_alpha,
         "csv_data_beta": csv_string_beta,
         "removed_numeric_columns": numeric_columns,
+        'beta_zip_base64': beta_zip_base64
     }
 
     templates = [

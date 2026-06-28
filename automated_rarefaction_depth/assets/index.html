@@ -33,7 +33,7 @@
     </ul>
 </nav>
 
-{% if removed_numeric_columns and removed_numeric_columns|length > 0 %}
+{% if alpha and removed_numeric_columns and removed_numeric_columns|length > 0 %}
     <div class="row">
       <p class="alert alert-warning col-md-12" style="font-size: 14px; background-color: #fcf8e3; border-color: #faf2cc; color: #8a6d3b; padding: 10px 15px; margin-bottom: 15px; margin-left: 12px; margin-right: 12px; width: calc(100% - 24px);">
         The following metadata columns have been omitted because they didn't contain categorical data, or the column consisted only of missing values:

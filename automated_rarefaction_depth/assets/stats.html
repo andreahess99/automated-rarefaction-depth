@@ -45,6 +45,15 @@
                         <button type="button" class="btn btn-outline-secondary" id="downloadBtn">
                             ⬇ Download CSV
                         </button>
+                        {% if beta_zip_base64 %}
+                            <a href="data:application/zip;base64,{{ beta_zip_base64 }}" class="btn btn-outline-success" download="beta_matrices.zip">
+                                📦 Download Distance Matrices (.zip)
+                            </a>
+                        {% else %}
+                            <button type="button" class="btn btn-outline-success" disabled>
+                                📦 No ZIP Available
+                            </button>
+                        {% endif %}
                         <button type="button" class="btn btn-outline-info" id="openHelpBtn">
                             <strong>?</strong>&nbsp;Help & Info
                         </button>
@@ -86,6 +95,7 @@
         </p>
         <p>
             Click the ⬇ Download CSV button to download a CSV file with the points used to create the rarefaction curve. 
+            click the 📦 Download Distance Matrices (.zip) button to download a ZIP file containing the distance matrices at each rarefaction depth.
          </p>
       </div>
       <div class="modal-footer">
@@ -179,6 +189,7 @@
     const betaMetric = "{{ beta_metric }}";
     const algorithm = "{{ algorithm }}";
     const csvDataBeta = {{ csv_data_beta | tojson }};
+    const betaZipBase64 = "{{ beta_zip_base64 }}"; 
   </script>
 
 {% endblock %}
