@@ -42,17 +42,9 @@
                     <div class="d-flex justify-content-between align-items-flex-end mb-3" style="gap: 12px; align-items: flex-end;">
                         <div id="metric-dropdown-container"></div>
                         <span id="knee-point-display" class="knee-point-box">Knee point: —</span>
-                        <button type="button" class="btn btn-outline-secondary" id="downloadBtn">
-                            ⬇ Download CSV
-                        </button>
+                        <button type="button" class="btn btn-outline-info" id="downloadBtn">⬇ Download CSV</button>
                         {% if beta_zip_base64 %}
-                            <a href="data:application/zip;base64,{{ beta_zip_base64 }}" class="btn btn-outline-success" download="beta_matrices.zip">
-                                📦 Download Distance Matrices (.zip)
-                            </a>
-                        {% else %}
-                            <button type="button" class="btn btn-outline-success" disabled>
-                                📦 No ZIP Available
-                            </button>
+                            <button type="button" class="btn btn-outline-info" id="downloadZipBtn">📦 Download Distance Matrices (.zip)</button>
                         {% endif %}
                         <button type="button" class="btn btn-outline-info" id="openHelpBtn">
                             <strong>?</strong>&nbsp;Help & Info
@@ -124,6 +116,15 @@
             a.click();
             URL.revokeObjectURL(url);
         });
+        const downloadZipBtn = document.getElementById('downloadZipBtn');
+        if (downloadZipBtn) {
+            downloadZipBtn.addEventListener('click', function() {
+                const a = document.createElement('a');
+                a.href = "data:application/zip;base64,{{ beta_zip_base64 }}";
+                a.download = 'beta_matrices.zip';
+                a.click();
+            });
+        }
        
         const helpBtn = document.getElementById('openHelpBtn');
         if (helpBtn) {

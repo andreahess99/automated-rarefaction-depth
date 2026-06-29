@@ -286,12 +286,12 @@ form.vega-bindings {
     margin-left: auto;
 }
 
-#downloadBtn, #openHelpBtn {
+#downloadBtn, #openHelpBtn, #downloadZipBtn {
     border-color: #ced4da;
     color: #6c757d;
 }
 
-#downloadBtn:hover, #openHelpBtn:hover {
+#downloadBtn:hover, #openHelpBtn:hover, #downloadZipBtn:hover {
     background-color: #ced4da;
     color: #fff;
 }
@@ -327,7 +327,7 @@ form.vega-bindings {
 }
 
 /* Ensure the native Bootstrap 5 buttons match perfectly */
-#downloadBtn, #openHelpBtn {
+#downloadBtn, #openHelpBtn , #downloadZipBtn {
     height: 38px !important;
     display: inline-flex;
     align-items: center;
