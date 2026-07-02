@@ -17,7 +17,6 @@ import numpy as np
 import pandas as pd
 import qiime2
 import q2templates
-#from qiime2 import Artifact
 from kneed import KneeLocator
 import altair as alt
 from shutil import copytree
@@ -69,7 +68,8 @@ _pipe_defaults = {
     'min_df': 1,
     'max_features': None,
     'norm': 'None',
-    'metrics': {'observed_features', 'shannon'}
+    'metrics': {'observed_features', 'shannon'},
+    'max_depth': None
 }
 
 
@@ -82,9 +82,8 @@ warnings.simplefilter(action='ignore', category=UserWarning)
 def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], metrics=_pipe_defaults['metrics'],
                    steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
                    seed = _pipe_defaults['seed'], kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
-                   min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm']):
+                   min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm'], max_depth=_pipe_defaults['max_depth']):
     
-    #alpha_action = ctx.get_action('boots', 'alpha')
     beta_action = ctx.get_action('boots', 'beta')
     kmer_action = ctx.get_action('kmerizer', 'seqs_to_kmers')
     viz_combined_action = ctx.get_action('rarefaction-depth', '_combined_viz')
@@ -93,11 +92,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     table_df = table.view(pd.DataFrame)
     alpha = False
     beta = False
-    #observed_features, shannon and braycurtis are always included
-    #metrics.add('observed_features')
-    #uncomment after development
-    #metrics.add('shannon')
-    #metrics.add('braycurtis')
 
     if any(m in ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao', 'canberra_adkins',
                          'sokalmichener', 'sokalsneath', 'yule', 'correlation', 'cosine', 'aitchison',  'canberra'] for m in metrics):
@@ -147,15 +141,21 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
 
     table_size = len(table_df)
-    reads_per_sample = table_df.sum(axis=1) 
-    percentile = 90
-    #adjust max_reads if kneedle and shannon -> maybe adjust the percentile later
-    """if (metric == 'shannon' and kmer_run == True):
-        percentile = 30
-    elif (metric == 'shannon' and kmer_run == False):
-        percentile = 60"""
-    max_reads = int(np.percentile(reads_per_sample, percentile))
-    
+    reads_per_sample = table_df.sum(axis=1)
+    #test
+    if(max_depth is None):
+        percentile = 90
+        max_reads = int(np.percentile(reads_per_sample, percentile))
+        print(f"max_reads at {percentile} percentile:", max_reads)
+        if max_reads < 2000:
+            max_reads = (int(max_reads / 100) * 100)
+        else:
+            max_reads = (int(max_reads / 500) * 500)
+    else:
+        max_reads = max_depth
+
+    print("max_reads:", max_reads)
+
     sorted_depths = reads_per_sample.sort_values()
     sorted_depths_pass = [int(depth) for depth in sorted_depths.tolist()] 
     reads_per_sample_pass = [int(read) for read in reads_per_sample.tolist()]
@@ -167,8 +167,8 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     reads_per_sample_merged = (reads_per_sample_merged.rename(columns={"sample": "sample-id"}).set_index("sample-id"))
    
 
-    sample_loss_index = int(np.ceil((1-percent_samples) * len(sorted_depths))) - 1 
-    depth_threshold = int(sorted_depths.iloc[sample_loss_index])
+    #sample_loss_index = int(np.ceil((1-percent_samples) * len(sorted_depths))) - 1 
+    #depth_threshold = int(sorted_depths.iloc[sample_loss_index])
 
     sample_list = table_df.index.tolist()
 
@@ -324,12 +324,12 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 print(knee_point)
                 knee_point_list.append((knee_point, metric))
 
-        
-            combined_df = mean_df.pivot(index='sample', columns='read_depth', values='mean_observed').reset_index()
+            # I think this code was unnecessary/ not doing anything -> test it!
+            """combined_df = mean_df.pivot(index='sample', columns='read_depth', values='mean_observed').reset_index()
             combined_df = combined_df.drop(combined_df.columns[-1], axis=1)
-            combined_df.index = combined_df.index.astype(str)
+            combined_df.index = combined_df.index.astype(str)"""
         
-            percent_samples_100 = round(percent_samples * 100, 2)
+            #percent_samples_100 = round(percent_samples * 100, 2)
     
             combined = pd.concat(combined_dfs, ignore_index=True)
             combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
@@ -344,15 +344,15 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         else:
             combined = None
             knee_point_list = None
-            percent_samples_100 = float(percent_samples * 100)
+            #percent_samples_100 = float(percent_samples * 100)
             sorted_depths_pass = None
             metrics_alpha = None
             knee_point = 0
             
-        visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, percent_samples_100=percent_samples_100, steps=steps, algorithm=algorithm,
-                            sorted_depths=sorted_depths_pass, knee_point=knee_point, max_reads=int(max_reads), depth_threshold=int(depth_threshold), max_read_percentile=percentile, 
+        visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, steps=steps, algorithm=algorithm,
+                            sorted_depths=sorted_depths_pass, max_reads=int(max_reads), max_range=clean_max_range,
                             combined=combined, metadata_columns=metadata_columns, rps=qiime2.Metadata(reads_per_sample_merged), kp_list=knee_point_list,
-                            kp_list_beta=kp_list_beta, data_beta=data_beta, alpha_metrics=metrics_alpha, beta_metrics=metrics_beta, num_samples=num_samples, max_range=clean_max_range,
+                            kp_list_beta=kp_list_beta, data_beta=data_beta, alpha_metrics=metrics_alpha, beta_metrics=metrics_beta, num_samples=num_samples, 
                             numeric_columns=numeric_columns, beta_zip_path=temp_zip_path) 
 
         return visualization
@@ -489,7 +489,7 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
 # combined visualization function for alpha and beta metrics
 # to do: add some text somewhere if kmer was run?
 def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, algorithm: str = "kneedle", num_samples: qiime2.Metadata = None, steps: int = None, 
-                  percent_samples_100: float = 0, sorted_depths: list[int] = None, max_reads: int = 1, depth_threshold: int = 1, knee_point: int = 0, max_read_percentile: int = 1,
+                  sorted_depths: list[int] = None, max_reads: int = 1,
                   metadata_columns: list[str] = None, combined: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None, beta_zip_path: Str = None,
                   kp_list_beta: qiime2.Metadata = None, data_beta: qiime2.Metadata = None, alpha_metrics: list[str] = None, beta_metrics: list[str] = None, numeric_columns: list[str] = None)->None:  
     
@@ -517,22 +517,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         kp_list = kp_list.drop('id', axis=1)
         kp_list = kp_list.to_dict(orient='records')
         sorted_depths = pd.Series(sorted_depths)
-        #reads_per_sample = pd.DataFrame(reads_per_sample)
-
-        #finding +-5% points & at what percentile knee point is
-        """index = np.searchsorted(sorted_depths, knee_point)
-        percentile = round((index / len(sorted_depths)) * 100, 2)
-        lower_percentile = max(percentile - 5, 0) 
-        upper_percentile = min(percentile + 5, 100) 
-        lower_index = int((lower_percentile / 100) * len(sorted_depths))
-        upper_index = min(int((upper_percentile / 100) * len(sorted_depths)), len(sorted_depths) - 1)
-        lower_value = round(sorted_depths.iloc[lower_index])
-        upper_value = round(sorted_depths.iloc[upper_index])"""
-
-        #is this still needed?
-        """reads_per_sample_df = reads_per_sample.reset_index()
-        reads_per_sample_df.columns = ['sample', 'reads_per_sample']
-        reads_per_sample_df["sample"] = reads_per_sample_df["sample"].astype(str)"""
         
         rps = rps.to_dataframe().reset_index()
    

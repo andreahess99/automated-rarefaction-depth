@@ -3,6 +3,7 @@
   "autosize": {"type": "fit-x", "contains": "padding"},
   "width": 900,
   "height": 400,
+  "padding": { "bottom": 10},
   "signals": [
     {
       "name": "metricField",
