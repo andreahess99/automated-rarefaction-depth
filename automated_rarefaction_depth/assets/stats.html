@@ -33,6 +33,15 @@
     </ul>
 </nav>
 
+{% if beta and zero_beta_metrics %}
+    <div class="row">
+        <p class="alert alert-warning col-md-12" style="font-size: 14px; background-color: #FCE8D5; border-color: #FCE8D5; color: #4A3319; padding: 12px 15px; margin-bottom: 15px; margin-left: 12px; margin-right: 12px; width: calc(100% - 24px);">
+            The knee point could not be determined for the beta metric(s) <strong>{{ zero_beta_metrics | join(', ')}}</strong> using the <strong>{{ algorithm }} algorithm</strong>.
+            This may be due to the fact that the rarefaction curve does not have a clear knee point, or that the data is too sparse to determine a knee point. Please consider using a different beta diversity metric or algorithm to determine the optimal rarefaction depth.
+        </p>
+    </div>
+{% endif %}
+
   <div class="row">
     <div class="col-lg-12">
         <div class="card">
@@ -188,7 +197,7 @@
   <script>
     // data injected from python
     const isBeta = {{ beta | lower }};
-    const betaMetric = "{{ beta_metric }}";
+    const betaMetric = "{{ zero_beta_metrics }}";
     const algorithm = "{{ algorithm }}";
     const csvDataBeta = {{ csv_data_beta | tojson }};
     const betaZipBase64 = "{{ beta_zip_base64 }}"; 

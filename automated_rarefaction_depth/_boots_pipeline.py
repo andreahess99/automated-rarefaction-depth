@@ -6,6 +6,7 @@
 # The full license is in the file LICENSE, distributed with this software.
 # ----------------------------------------------------------------------------
 
+from curses import meta
 import json
 import os
 import base64 
@@ -59,7 +60,6 @@ _pipe_defaults = {
     'iterations': 10,
     'table_size': None,
     'steps': 20,
-    'percent_samples': 0.8,
     'algorithm': 'kneedle', 
     'seed': 42,
     'kmer_size': 16,
@@ -80,9 +80,9 @@ warnings.simplefilter(action='ignore', category=UserWarning)
  
 
 def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], metrics=_pipe_defaults['metrics'],
-                   steps=_pipe_defaults['steps'], percent_samples=_pipe_defaults['percent_samples'], algorithm=_pipe_defaults['algorithm'],
+                   steps=_pipe_defaults['steps'], algorithm=_pipe_defaults['algorithm'], max_depth=_pipe_defaults['max_depth'],
                    seed = _pipe_defaults['seed'], kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
-                   min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm'], max_depth=_pipe_defaults['max_depth']):
+                   min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm']):
     
     beta_action = ctx.get_action('boots', 'beta')
     kmer_action = ctx.get_action('kmerizer', 'seqs_to_kmers')
@@ -99,11 +99,11 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         metrics_beta = [m for m in metrics if m in ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao',
                          'sokalmichener', 'sokalsneath', 'yule', 'canberra_adkins', 'correlation', 'cosine', 'aitchison',  'canberra']]
     else:
-            metrics_beta = []
-            kp_list_beta = None
-            df_bars = None
-            num_samples = None
-            data_beta = None
+        metrics_beta = []
+        kp_list_beta = None
+        df_bars = None
+        num_samples = None
+        data_beta = None
         
     if any(m not in metrics_beta for m in metrics):
         alpha = True 
@@ -117,10 +117,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     metadata_columns = ["sample"] + meta.columns.tolist()
     print("metadata_columns:", metadata_columns)
     print("numeric_columns:", numeric_columns)
-    
-   
     print(metrics)
-    metric = list(metrics)[0] #for now just take the first metric in the set, so I don't get errors from my beta code
     
     #run seqs_to_kmers if sequence is provided
     kmer_run = False
@@ -142,7 +139,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
 
     table_size = len(table_df)
     reads_per_sample = table_df.sum(axis=1)
-    #test
+
     if(max_depth is None):
         percentile = 90
         max_reads = int(np.percentile(reads_per_sample, percentile))
@@ -156,20 +153,15 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
 
     print("max_reads:", max_reads)
 
-    sorted_depths = reads_per_sample.sort_values()
-    sorted_depths_pass = [int(depth) for depth in sorted_depths.tolist()] 
-    reads_per_sample_pass = [int(read) for read in reads_per_sample.tolist()]
+    num_cols = meta.select_dtypes(include=[np.number]).columns
+    meta[num_cols] = meta[num_cols].fillna(0)
 
-    meta.fillna(0, inplace=True)
+    reads_per_sample_pass = [int(read) for read in reads_per_sample.tolist()]
     reads_per_sample_merged = pd.DataFrame({"sample": table_df.index.tolist(), "reads": reads_per_sample_pass})
     reads_per_sample_merged = reads_per_sample_merged.merge(meta, left_on="sample", right_index=True, how="left")     
     reads_per_sample_merged.index.name = "sample"
     reads_per_sample_merged = (reads_per_sample_merged.rename(columns={"sample": "sample-id"}).set_index("sample-id"))
    
-
-    #sample_loss_index = int(np.ceil((1-percent_samples) * len(sorted_depths))) - 1 
-    #depth_threshold = int(sorted_depths.iloc[sample_loss_index])
-
     sample_list = table_df.index.tolist()
 
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
@@ -191,8 +183,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 std_difference = [None] * (steps-1)
                 p75_25_difference = [None] * (steps-1)
                 avg_range = [None] * (steps-1)
-                #workaround as call fails for sampling_depth=1
-                #max_range[0] = 1
+                
                 for i in range(steps):
                     print(f"step {i+1}: {max_range[i]}")
                     #beta_result, = beta_action(table=table, sampling_depth=1, metric=metric, n=iterations, replacement=False)
@@ -233,7 +224,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 clean_avg_diff = [float(x) if x is not None else 0.0 for x in avg_difference]
                 data_beta.append(pd.DataFrame({'metric': metric, 'depth': avg_range[1:], 'observed': clean_avg_diff[1:]}))
                 if k==0:
-                    #clean_samples_left = [int(x) for x in num_samples_left]
                     df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
                     
                 kpb = knee_point_locator(avg_range[1:], clean_avg_diff[1:], algorithm, "convex", "decreasing")
@@ -270,7 +260,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         
         if alpha:
             #if alpha metric was chosen
-            #dfs = []
             combined_dfs = []
             knee_point_list = []
 
@@ -300,7 +289,9 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                     #making the mean_df which I would need for the knee point calculation
                     mean_df = (combined.groupby(['sample', 'read_depth'], as_index=False).agg(mean_observed=('observed', 'mean')))
                 
-                meta.fillna(0, inplace=True)
+                num_cols = meta.select_dtypes(include=[np.number]).columns 
+                meta[num_cols] = meta[num_cols].fillna(0)
+
                 combined = combined.merge(meta, left_on="sample", right_index=True, how="left")
 
                 combined_dfs.append(combined)
@@ -323,17 +314,24 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 print("calculated rarefaction depth:")
                 print(knee_point)
                 knee_point_list.append((knee_point, metric))
-
-            # I think this code was unnecessary/ not doing anything -> test it!
-            """combined_df = mean_df.pivot(index='sample', columns='read_depth', values='mean_observed').reset_index()
-            combined_df = combined_df.drop(combined_df.columns[-1], axis=1)
-            combined_df.index = combined_df.index.astype(str)"""
-        
-            #percent_samples_100 = round(percent_samples * 100, 2)
     
+            """combined = pd.concat(combined_dfs, ignore_index=True)
+            combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
+            combined = combined.set_index('id')
+            combined = qiime2.Metadata(combined)
+            """
             combined = pd.concat(combined_dfs, ignore_index=True)
             combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
             combined = combined.set_index('id')
+            #fixing the metadata 
+            for col in combined.columns:
+                if combined[col].dtype == 'object' or combined[col].dtype.name == 'category' or col in ['Bucket', 'SampleType', 'FLWC Detail']:
+                    combined[col] = combined[col].apply(
+                        lambda x: str(int(x)) if isinstance(x, (int, float)) and pd.notna(x) and float(x).is_integer()
+                        else (str(x) if pd.notna(x) else np.nan)
+                    )
+                    combined[col] = combined[col].astype(object)
+
             combined = qiime2.Metadata(combined)
             
             kp_df = pd.DataFrame(knee_point_list, columns=['knee', 'metric'])
@@ -344,13 +342,11 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         else:
             combined = None
             knee_point_list = None
-            #percent_samples_100 = float(percent_samples * 100)
-            sorted_depths_pass = None
             metrics_alpha = None
             knee_point = 0
             
-        visualization, = viz_combined_action(metric=metric, kmer_run=kmer_run, steps=steps, algorithm=algorithm,
-                            sorted_depths=sorted_depths_pass, max_reads=int(max_reads), max_range=clean_max_range,
+        visualization, = viz_combined_action(kmer_run=kmer_run, steps=steps, algorithm=algorithm,
+                            max_reads=int(max_reads), max_range=clean_max_range,
                             combined=combined, metadata_columns=metadata_columns, rps=qiime2.Metadata(reads_per_sample_merged), kp_list=knee_point_list,
                             kp_list_beta=kp_list_beta, data_beta=data_beta, alpha_metrics=metrics_alpha, beta_metrics=metrics_beta, num_samples=num_samples, 
                             numeric_columns=numeric_columns, beta_zip_path=temp_zip_path) 
@@ -488,14 +484,14 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
 
 # combined visualization function for alpha and beta metrics
 # to do: add some text somewhere if kmer was run?
-def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[float] = None, algorithm: str = "kneedle", num_samples: qiime2.Metadata = None, steps: int = None, 
-                  sorted_depths: list[int] = None, max_reads: int = 1,
+def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None, algorithm: str = "kneedle", num_samples: qiime2.Metadata = None, steps: int = None, max_reads: int = 1,
                   metadata_columns: list[str] = None, combined: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None, beta_zip_path: Str = None,
                   kp_list_beta: qiime2.Metadata = None, data_beta: qiime2.Metadata = None, alpha_metrics: list[str] = None, beta_metrics: list[str] = None, numeric_columns: list[str] = None)->None:  
     
     #default values for the tabbed_context
     beta = False
     alpha = False
+    zero_beta_metrics = []
 
     # beta metric specific code
     if beta_metrics is not None and len(beta_metrics) > 0:
@@ -516,22 +512,13 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         kp_list = kp_list.to_dataframe().reset_index()
         kp_list = kp_list.drop('id', axis=1)
         kp_list = kp_list.to_dict(orient='records')
-        sorted_depths = pd.Series(sorted_depths)
-        
         rps = rps.to_dataframe().reset_index()
    
-    # specify names and titles according to what was run
     if kmer_run:
-        graph_data = "number of observed kmers"
-        graph_name = "Kmers"
         x_title = 'Sequencing Depth [Kmers]'
     else:
-        graph_data = "number of observed features"
-        graph_name = "Reads"
         x_title = 'Sequencing Depth [Reads]'
 
-    if beta:
-        graph_data = "Distance"
 
     TEMPLATES = os.path.join(
         os.path.dirname(__file__),
@@ -543,8 +530,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         with open(os.path.join(TEMPLATES, "mm-beta.json")) as f:
             spec_beta = json.load(f)
         for d in spec_beta["data"]:
-            """if d["name"] == "raw":
-                d["values"] = line_chart_df.to_dict(orient='records')"""
             if d["name"] == "samples":
                 d["values"] = df_bars.to_dict(orient='records') 
             if d["name"] == "knee_points":
@@ -555,6 +540,10 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 signal["bind"]["options"] = beta_metrics
 
         csv_string_beta = line_chart_df.to_csv(index=True)
+        for metric in kp_list_beta:
+            if metric['knee'] == 0:
+                zero_beta_metrics.append(metric['metric'])
+     
     else:
         spec_beta = {"warning": "Warning! No beta metric was specified!"}
         csv_string_beta = ""
@@ -573,10 +562,6 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
                 signal["value"] = x_title
 
         for d in spec["data"]:
-            """if d["name"] == "raw":
-                combined = combined.to_dataframe().reset_index()
-                combined = combined.drop('id', axis=1)
-                d["values"] = combined.to_dict(orient='records')"""
             if d["name"] == "samples":
                 max_range = np.linspace(1, max_reads, num=steps, dtype=int)
                 depths_list = [int(d) for d in max_range]
@@ -616,7 +601,7 @@ def _combined_viz(output_dir: str, metric: str, kmer_run: bool, max_range: list[
         ],
         "vega_json": vega_json,
         "vega_json2": vega_json2,
-        "beta_metric": str(metric),
+        "zero_beta_metrics": zero_beta_metrics,
         "algorithm": str(algorithm),
         "alpha": alpha,
         "beta": beta,
