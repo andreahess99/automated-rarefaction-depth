@@ -310,10 +310,20 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                     
             
                 knee_points_filtered = [point for point in knee_points if point is not None] 
-                knee_point = round(np.mean(knee_points_filtered))
+                #test this
+                if len(knee_points_filtered) > 0:
+                    knee_point = round(np.mean(knee_points_filtered))
+                else:
+                    # Fallback default value if no sample yields a valid knee point
+                    print(f"Warning: No valid knee points found for metric {metric}. Defaulting to 0.")
+                    knee_point = 0
+
+                print("calculated rarefaction depth:", knee_point)
+                knee_point_list.append((knee_point, metric))
+                """knee_point = round(np.mean(knee_points_filtered))
                 print("calculated rarefaction depth:")
                 print(knee_point)
-                knee_point_list.append((knee_point, metric))
+                knee_point_list.append((knee_point, metric))"""
     
             """combined = pd.concat(combined_dfs, ignore_index=True)
             combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
@@ -365,123 +375,6 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
     return knee_point
 
 
-#calculates the knee point and makes the visualization for beta rarefaction
-"""def _beta_viz(output_dir: str, max_range: list[float], kmer_run: bool, calc_array: list[float] , metric: str, algorithm: str, num_samples_left: list[int])->None:
- 
-    avg_range = [None] * (len(max_range)-1)
-    for i in range(1, len(max_range)):
-        avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
-    
-    #calculate knee  point
-    knee_point = knee_point_locator(avg_range[1:], calc_array[1:], algorithm, "beta", "increasing")
-    if knee_point is None:
-        knee_point = 0
-    else:
-        knee_point = round(float(knee_point))
-
-    #plotting with altair
-    alt.themes.register('altair_theme', altair_theme)
-    alt.themes.enable('altair_theme')
-
-    #make 2 plots again 1 scatter, 1 barplot with same functionality as alpha_viz with zoom etc
-    zoom = alt.selection_interval(bind='scales')
-    param_checkbox = alt.param(
-        bind=alt.binding_checkbox(name='Show read depth specified by slider as a line on the plot: ')
-    ) 
-    s = alt.param(
-        name='position', bind=alt.binding_range(min=0, max=avg_range[-1], step=20, name='Rarefaction Depth Line'), value=knee_point
-    )
-
-    df = pd.DataFrame({'max_range': avg_range[1:], 'calc_array': calc_array[1:]})
-    base = alt.Chart(df).mark_line(point=True).encode(
-            x=alt.X('max_range:Q', title='Read Depth'),
-            y=alt.Y('calc_array:Q', title='Calculated Value'), #adjust to what it is 
-        ).properties(
-            width=400,
-            height=300,
-            title='Beta Rarefaction Curve'
-        ).add_params(zoom, param_checkbox) 
-    
-    static_line = alt.Chart(pd.DataFrame({'position': [knee_point]})).mark_rule(
-        color='red', strokeWidth=2).encode(x='position:Q').properties()
-    
-    moving_line = alt.Chart(pd.DataFrame({'position': [0]})).mark_rule(
-        color='black', strokeWidth=2, strokeDash=[4, 4]).encode(
-            x='position:Q'
-        ).add_params(s).transform_calculate(position='position').transform_filter(param_checkbox)
-    
-
-    beta_rf_plot = alt.layer(base, static_line, moving_line).resolve_scale(x='shared', y='shared')
-
-    #barplot
-    df_bars = pd.DataFrame({'max_range': max_range, 'num_samples_left': num_samples_left})
-    bar_chart = alt.Chart(df_bars).mark_bar(color='steelblue').encode(
-            x=alt.X('max_range:Q', title='Read Depth'),
-            y=alt.Y('num_samples_left:Q', title='Number of Samples Left')
-        ).properties(
-            width=400,
-            height=300,
-            title='Samples Remaining per Rarefaction Depth')
-
-    # trying to fix the layout
-    text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
-    upper_chart = alt.vconcat(beta_rf_plot, text_lines).properties(spacing=0)
-    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
-    upper_chart = alt.vconcat(empty_lines, upper_chart).properties(spacing=0)
-
-    bar_space = alt.vconcat(bar_chart, text_lines).properties(spacing=0)
-    bar_space = alt.vconcat(empty_lines, bar_space).properties(spacing=0)
-
-    combined_chart = alt.hconcat(upper_chart, bar_space).properties(spacing=60).configure_legend(
-        labelFontSize=14,  
-        titleFontSize=14   
-    )
-    
-    combined_chart["padding"] = {
-        "top": 0,
-        "left": 0,
-        "right": 0,
-        "bottom":  -49#0  
-    }
-    #define and make all necessary files & definitions
-    vega_json = combined_chart.to_json() 
-
-    TEMPLATES = os.path.join(
-        os.path.dirname(__file__),
-        "assets"
-    )
-    
-    #add some text somewhere if kmer was run?
-    beta_context = { 
-        "vega_json": vega_json,
-        "beta_metric": (str(metric)),
-        "knee_point": (knee_point),
-        "beta": (True),
-        "algorithm": (str(algorithm)),
-        "percent_samples_100": (0),
-        "depth_threshold": (0),
-        "add_text": (False),
-        "percentile": (0),
-        "lower_percentile": (0),
-        "upper_percentile": (0),
-        "lower_value": (0),
-        "upper_value": (0),
-        "graph_data": (str(metric)),
-        "graph_name": (str(metric)),
-        "max_read_percentile": (0)
-    }
-    
-    templates = os.path.join(TEMPLATES, 'index.html')
-
-    copytree(
-        src=TEMPLATES,
-        dst=output_dir,
-        dirs_exist_ok=True 
-    )
-   
-    q2templates.render(templates, output_dir, context=beta_context)"""
-
-
 # combined visualization function for alpha and beta metrics
 # to do: add some text somewhere if kmer was run?
 def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None, algorithm: str = "kneedle", num_samples: qiime2.Metadata = None, steps: int = None, max_reads: int = 1,
@@ -501,9 +394,14 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
         line_chart_df = line_chart_df.drop('id', axis=1)
         kp_list_beta = kp_list_beta.to_dataframe().reset_index()
         kp_list_beta = kp_list_beta.drop('id', axis=1)
+        # --- FIX 1: Sanitize beta knee points for valid JSON ---
+        kp_list_beta = kp_list_beta.replace({np.nan: None})
+
         kp_list_beta = kp_list_beta.to_dict(orient='records')
         df_bars = num_samples.to_dataframe().reset_index()
         df_bars = df_bars.drop('id', axis=1)
+        # --- FIX 2: Sanitize beta sample counts for valid JSON ---
+        df_bars = df_bars.replace({np.nan: None})
 
 
     #alpha metric specific code
@@ -511,6 +409,9 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
         alpha = True
         kp_list = kp_list.to_dataframe().reset_index()
         kp_list = kp_list.drop('id', axis=1)
+        # --- FIX 3: Sanitize alpha knee points for valid JSON ---
+        kp_list = kp_list.replace({np.nan: None})
+
         kp_list = kp_list.to_dict(orient='records')
         rps = rps.to_dataframe().reset_index()
    
@@ -567,6 +468,9 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
                 depths_list = [int(d) for d in max_range]
                 rps.rename(columns={"sample-id": "sample"}, inplace=True)
                 rps = rps.set_index("sample").reset_index()
+                # --- CRITICAL FIX 4: Sanitize metadata containing NaNs into safe JSON nulls ---
+                rps = rps.replace({np.nan: None})
+
                 samples_records = rps.to_dict(orient='records')
                 for s in samples_records:
                     s["all_depths"] = depths_list
