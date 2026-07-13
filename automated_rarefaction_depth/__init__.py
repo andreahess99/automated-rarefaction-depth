@@ -8,11 +8,10 @@
 # ----------------------------------------------------------------------------
 
 from ._version import get_versions
-from ._visualizers import rarefaction_depth
-from ._boots_pipeline import pipeline_boots, _rf_visualizer_boots
+from ._boots_pipeline import pipeline_boots, _combined_viz
 
 
-__all__ = ['rarefaction_depth', 'pipeline_boots', '_rf_visualizer_boots']		
+__all__ = [ 'pipeline_boots', '_combined_viz']		
 
 __version__ = get_versions()["version"]
 del get_versions

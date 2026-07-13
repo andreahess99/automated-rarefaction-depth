@@ -6,54 +6,21 @@
 # The full license is in the file LICENSE, distributed with this software.
 # ----------------------------------------------------------------------------
 
-from curses import meta
 import json
 import os
 import base64 
-import shutil
+#import shutil
+from shutil import copytree, copy
 from xxlimited import Str
 import tempfile, zipfile
-from importlib_metadata import metadata
 import numpy as np
 import pandas as pd
 import qiime2
 import q2templates
 from kneed import KneeLocator
-import altair as alt
-from shutil import copytree
+
 import warnings
 from skbio import DistanceMatrix
-
-
-
-"""def altair_theme():
-        font = "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif"
-        return {
-        "config" : {
-             "title": {'font': font},
-             "axis": {
-                  "labelFont": font,
-                  "titleFont": font,
-                  "labelFontSize": 14,
-                  "titleFontSize": 13
-             },
-             "header": {
-                  "labelFont": font,
-                  "titleFont": font,
-                  "labelFontSize": 14,
-                  "titleFontSize": 13 
-             },
-             "legend": {
-                  "labelFont": font,
-                  "titleFont": font,
-                  "titleFontSize": 14
-             },
-             "text": {
-                  "font": font,
-                  "fontSize": 16
-             }
-        }
-    }"""
 
 
 _pipe_defaults = {
@@ -73,11 +40,9 @@ _pipe_defaults = {
 }
 
 
-#ignore warnings
+#ignore future warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
-warnings.simplefilter(action='ignore', category=UserWarning)
- 
 
 def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], metrics=_pipe_defaults['metrics'],
                    steps=_pipe_defaults['steps'], algorithm=_pipe_defaults['algorithm'], max_depth=_pipe_defaults['max_depth'],
@@ -115,8 +80,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     numeric_columns = meta.select_dtypes(include=[np.number]).columns.tolist()
     meta = meta.drop(columns=numeric_columns)
     metadata_columns = ["sample"] + meta.columns.tolist()
-    print("metadata_columns:", metadata_columns)
-    print("numeric_columns:", numeric_columns)
     print(metrics)
     
     #run seqs_to_kmers if sequence is provided
@@ -140,18 +103,16 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     table_size = len(table_df)
     reads_per_sample = table_df.sum(axis=1)
 
+    #round the max_depth to a nice number
     if(max_depth is None):
         percentile = 90
         max_reads = int(np.percentile(reads_per_sample, percentile))
-        print(f"max_reads at {percentile} percentile:", max_reads)
         if max_reads < 2000:
             max_reads = (int(max_reads / 100) * 100)
         else:
             max_reads = (int(max_reads / 500) * 500)
     else:
         max_reads = max_depth
-
-    print("max_reads:", max_reads)
 
     num_cols = meta.select_dtypes(include=[np.number]).columns
     meta[num_cols] = meta[num_cols].fillna(0)
@@ -167,7 +128,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
     clean_max_range = [float(x) for x in max_range]
 
-    temp_zip_path = None #just to make sure it's defined if beta is not run
+    temp_zip_path = None 
 
     # beta metric specific code
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -186,7 +147,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 
                 for i in range(steps):
                     print(f"step {i+1}: {max_range[i]}")
-                    #beta_result, = beta_action(table=table, sampling_depth=1, metric=metric, n=iterations, replacement=False)
                     beta_result, = beta_action(table=table, sampling_depth=(int(max_range[i])), metric=metric, n=iterations, replacement=False)
                 
                     # saving the beta_result file
@@ -199,7 +159,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                         num_samples_left[i] = beta_result.view(DistanceMatrix).shape[0] 
 
                     if i > 0:
-                        # reduce old_beta_result to only the ids present in the current beta_result
+                        #reduce old_beta_result to only the ids present in the current beta_result
                         old_dm_full = old_beta_result.view(DistanceMatrix)
                         new_ids = list(beta_result.view(DistanceMatrix).ids)
                         common_ids = [sid for sid in old_dm_full.ids if sid in new_ids]
@@ -229,7 +189,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 kpb = knee_point_locator(avg_range[1:], clean_avg_diff[1:], algorithm, "convex", "decreasing")
                 kpb = round(float(kpb)) if kpb is not None else 0
                 knee_points_beta.append(pd.DataFrame({'knee': kpb, 'metric': metric}, index=[0]))
-                print("knee_points_beta:", knee_points_beta)
+                print("calculated rarefaction depth:", kpb)
 
 
             data_beta = pd.concat(data_beta, ignore_index=True)
@@ -254,7 +214,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for file_path in beta_artifact_paths:
                     zipf.write(file_path, arcname=os.path.basename(file_path))
-            #visualization, = viz_combined_action(max_range=clean_max_range, kmer_run=kmer_run, metric=metric, algorithm=algorithm, num_samples=num_samples, data_beta=data_beta, kp_list_beta=kp_list_beta, beta_metrics=metrics_beta)
         else:
             metrics_beta = None
         
@@ -268,11 +227,7 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                 dfs = []
                 for i in range(steps):
                     print(f"step {i+1}: {max_range[i]}")
-                    """result, = alpha_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False, average_method='mean')
-                    artifacts_list.append(result)"""
 
-                    #function to use if we want to get the data for each iteration and sample instead of just the average
-                    #and then combine it into a dataframe to use for the visualization and knee point calculation
                     sample_data, = alpha_collection_action(table=table, sampling_depth=int(max_range[i]), metric=metric, n=iterations, replacement=False)
                     for key, artifact in sample_data.items():
                         series = artifact.view(pd.Series)
@@ -286,16 +241,15 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                     combined = pd.concat(dfs, ignore_index=True)
 
                     # Calculate average after collecting all iterations for this depth
-                    #making the mean_df which I would need for the knee point calculation
                     mean_df = (combined.groupby(['sample', 'read_depth'], as_index=False).agg(mean_observed=('observed', 'mean')))
                 
                 num_cols = meta.select_dtypes(include=[np.number]).columns 
                 meta[num_cols] = meta[num_cols].fillna(0)
 
                 combined = combined.merge(meta, left_on="sample", right_index=True, how="left")
-
                 combined_dfs.append(combined)
-                #calculatin knee point here as data formats are a bit different
+
+                #calculating knee point 
                 if metric in ['observed_features', 'shannon', 'simpson', 'brillouin_d', 'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit']:
                     curve_type = "concave"
                     direction = "increasing"
@@ -309,39 +263,20 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
                     knee_points[i] = knee_point_locator(max_range_for_sample, array_sample, algorithm, curve_type, direction)
                     
             
-                knee_points_filtered = [point for point in knee_points if point is not None] 
-                #test this
+                knee_points_filtered = [point for point in knee_points if point is not None]
                 if len(knee_points_filtered) > 0:
                     knee_point = round(np.mean(knee_points_filtered))
                 else:
-                    # Fallback default value if no sample yields a valid knee point
+                    #default value if no sample yields a valid knee point
                     print(f"Warning: No valid knee points found for metric {metric}. Defaulting to 0.")
                     knee_point = 0
 
                 print("calculated rarefaction depth:", knee_point)
                 knee_point_list.append((knee_point, metric))
-                """knee_point = round(np.mean(knee_points_filtered))
-                print("calculated rarefaction depth:")
-                print(knee_point)
-                knee_point_list.append((knee_point, metric))"""
     
-            """combined = pd.concat(combined_dfs, ignore_index=True)
-            combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
-            combined = combined.set_index('id')
-            combined = qiime2.Metadata(combined)
-            """
             combined = pd.concat(combined_dfs, ignore_index=True)
             combined.insert(0, 'id', [f"row{i}" for i in range(len(combined))])
             combined = combined.set_index('id')
-            #fixing the metadata 
-            for col in combined.columns:
-                if combined[col].dtype == 'object' or combined[col].dtype.name == 'category' or col in ['Bucket', 'SampleType', 'FLWC Detail']:
-                    combined[col] = combined[col].apply(
-                        lambda x: str(int(x)) if isinstance(x, (int, float)) and pd.notna(x) and float(x).is_integer()
-                        else (str(x) if pd.notna(x) else np.nan)
-                    )
-                    combined[col] = combined[col].astype(object)
-
             combined = qiime2.Metadata(combined)
             
             kp_df = pd.DataFrame(knee_point_list, columns=['knee', 'metric'])
@@ -355,12 +290,11 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             metrics_alpha = None
             knee_point = 0
             
-        visualization, = viz_combined_action(kmer_run=kmer_run, steps=steps, algorithm=algorithm,
-                            max_reads=int(max_reads), max_range=clean_max_range,
-                            combined=combined, metadata_columns=metadata_columns, rps=qiime2.Metadata(reads_per_sample_merged), kp_list=knee_point_list,
-                            kp_list_beta=kp_list_beta, data_beta=data_beta, alpha_metrics=metrics_alpha, beta_metrics=metrics_beta, num_samples=num_samples, 
-                            numeric_columns=numeric_columns, beta_zip_path=temp_zip_path) 
-
+        visualization, = viz_combined_action(kmer_run=kmer_run, steps=steps, algorithm=algorithm, kp_list=knee_point_list,
+                            max_reads=int(max_reads), max_range=clean_max_range, alpha_metrics=metrics_alpha, numeric_columns=numeric_columns, 
+                            combined=combined, metadata_columns=metadata_columns, rps=qiime2.Metadata(reads_per_sample_merged), 
+                            kp_list_beta=kp_list_beta, data_beta=data_beta, beta_metrics=metrics_beta, num_samples=num_samples, beta_zip_path=temp_zip_path) 
+                            
         return visualization
 
 #calculates the knee point based on the chosen algorithm & metric
@@ -376,7 +310,6 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
 
 
 # combined visualization function for alpha and beta metrics
-# to do: add some text somewhere if kmer was run?
 def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None, algorithm: str = "kneedle", num_samples: qiime2.Metadata = None, steps: int = None, max_reads: int = 1,
                   metadata_columns: list[str] = None, combined: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None, beta_zip_path: Str = None,
                   kp_list_beta: qiime2.Metadata = None, data_beta: qiime2.Metadata = None, alpha_metrics: list[str] = None, beta_metrics: list[str] = None, numeric_columns: list[str] = None)->None:  
@@ -394,13 +327,11 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
         line_chart_df = line_chart_df.drop('id', axis=1)
         kp_list_beta = kp_list_beta.to_dataframe().reset_index()
         kp_list_beta = kp_list_beta.drop('id', axis=1)
-        # --- FIX 1: Sanitize beta knee points for valid JSON ---
         kp_list_beta = kp_list_beta.replace({np.nan: None})
 
         kp_list_beta = kp_list_beta.to_dict(orient='records')
         df_bars = num_samples.to_dataframe().reset_index()
         df_bars = df_bars.drop('id', axis=1)
-        # --- FIX 2: Sanitize beta sample counts for valid JSON ---
         df_bars = df_bars.replace({np.nan: None})
 
 
@@ -409,7 +340,6 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
         alpha = True
         kp_list = kp_list.to_dataframe().reset_index()
         kp_list = kp_list.drop('id', axis=1)
-        # --- FIX 3: Sanitize alpha knee points for valid JSON ---
         kp_list = kp_list.replace({np.nan: None})
 
         kp_list = kp_list.to_dict(orient='records')
@@ -420,7 +350,6 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
     else:
         x_title = 'Sequencing Depth [Reads]'
 
-
     TEMPLATES = os.path.join(
         os.path.dirname(__file__),
         "assets"
@@ -428,7 +357,7 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
 
     #dynamically populating the vega plot
     if beta:
-        with open(os.path.join(TEMPLATES, "mm-beta.json")) as f:
+        with open(os.path.join(TEMPLATES, "beta_vega.json")) as f:
             spec_beta = json.load(f)
         for d in spec_beta["data"]:
             if d["name"] == "samples":
@@ -451,7 +380,7 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
         
 
     if alpha:
-        with open(os.path.join(TEMPLATES, "mm_alpha_div.json")) as f:
+        with open(os.path.join(TEMPLATES, "alpha_vega.json")) as f:
             spec = json.load(f)
 
         for signal in spec["signals"]:
@@ -468,7 +397,6 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
                 depths_list = [int(d) for d in max_range]
                 rps.rename(columns={"sample-id": "sample"}, inplace=True)
                 rps = rps.set_index("sample").reset_index()
-                # --- CRITICAL FIX 4: Sanitize metadata containing NaNs into safe JSON nulls ---
                 rps = rps.replace({np.nan: None})
 
                 samples_records = rps.to_dict(orient='records')
@@ -493,7 +421,7 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
     beta_zip_base64 = ""
     if beta_zip_path and os.path.exists(beta_zip_path):
         destination = os.path.join(output_dir, 'beta_matrices.zip')
-        shutil.copy(beta_zip_path, destination)
+        copy(beta_zip_path, destination)
         with open(beta_zip_path, "rb") as zip_file:
             encoded_bytes = base64.b64encode(zip_file.read())
             beta_zip_base64 = encoded_bytes.decode('utf-8')
@@ -501,7 +429,7 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
     tabbed_context = {
         "tabs": [
             {"title": "Alpha Rarefaction", "url": "index.html"},
-            {"title": "Beta Rarefaction", "url": "stats.html"},
+            {"title": "Beta Rarefaction", "url": "index_beta.html"},
         ],
         "vega_json": vega_json,
         "vega_json2": vega_json2,
@@ -517,7 +445,7 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
 
     templates = [
         os.path.join(TEMPLATES, 'index.html'),
-        os.path.join(TEMPLATES, 'stats.html')
+        os.path.join(TEMPLATES, 'index_beta.html')
     ]
 
     copytree(
@@ -526,234 +454,6 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
         dirs_exist_ok=True 
     )
 
-    
     q2templates.render(templates, output_dir, context=tabbed_context)
 
-
-    
-def _rf_knee_locator(artifacts_list: pd.DataFrame, sample_list: list[str], steps: int, algorithm: str, max_reads: int) -> tuple[pd.DataFrame, int]:
-
-    knee_points = [None] * len(sample_list)
-    df_list = []
-    max_range = np.linspace(1, max_reads, num=steps, dtype=int)
-
-    for i, sample in enumerate(sample_list):
-        array_sample = np.array(artifacts_list.iloc[i]).flatten() 
-        sample = np.full(len(max_range), sample)  
-
-        sample_df = pd.DataFrame({'depth': max_range, 'observed_features': array_sample, 'sample': sample})
-        df_list.append(sample_df)
-
-        knee_points[i] = knee_point_locator(max_range, array_sample, algorithm, "alpha")
-
-    combined_df = pd.concat(df_list, ignore_index=True)
-    
-    knee_points_filtered = [point for point in knee_points if point is not None] 
-    knee_point = round(np.mean(knee_points_filtered))
-    print("calculated rarefaction depth:")
-    print(knee_point)
-
-    return combined_df, knee_point
-
-    
-
-def _rf_visualizer_boots(output_dir: str, sample_names: list[str], percent_samples: float, reads_per_sample: list[int], sorted_depths: list[int],
-                         metric: str, max_reads: int, depth_threshold: int, knee_point: int, kmer_run: bool, combined_df: pd.DataFrame,
-                         max_read_percentile: int, algorithm: str)-> None: 
-    
-    combined_df['sample'] = sample_names
-    sorted_depths = pd.Series(sorted_depths)
-    reads_per_sample = pd.DataFrame(reads_per_sample)
-
-    #finding +-5% points & at what percentile knee point is
-    index = np.searchsorted(sorted_depths, knee_point)
-    percentile = round((index / len(sorted_depths)) * 100, 2)
-
-    lower_percentile = max(percentile - 5, 0) 
-    upper_percentile = min(percentile + 5, 100) 
-
-    lower_index = int((lower_percentile / 100) * len(sorted_depths))
-    upper_index = min(int((upper_percentile / 100) * len(sorted_depths)), len(sorted_depths) - 1)
-
-    lower_value = round(sorted_depths.iloc[lower_index])
-    upper_value = round(sorted_depths.iloc[upper_index])
-
-    percent_samples_100 = round(percent_samples * 100, 2)
-
-    #plotting with altair
-    #register and enable the defined theme
-    alt.themes.register('altair_theme', altair_theme)
-    alt.themes.enable('altair_theme')
-    alt.data_transformers.disable_max_rows()
-
-    #plotting the rarefaction curves including the shaded area
-    depth_lines = pd.DataFrame({
-        'x': [lower_value, knee_point, upper_value],  
-        'label': ['-5%', 'Knee point', '+5%']  
-    })
-
-    reads_per_sample_df = reads_per_sample.reset_index()
-    reads_per_sample_df.columns = ['sample', 'reads_per_sample']
-
-    zoom = alt.selection_interval(bind='scales')
-
-    param_checkbox = alt.param(
-        bind=alt.binding_checkbox(name='Show read depth specified by slider as a line on the plot: '))
-
-    s = alt.param(
-        name='position', bind=alt.binding_range(min=0, max=max_reads, step=20, name='Rarefaction Depth Line'), value=knee_point)
-
-    if kmer_run:
-        title_x = 'Total Kmer Count'
-        title_y = '# Observed Distinct Kmers'
-        graph_data = "number of observed kmers"
-        graph_name = "Kmers"
-        barplot_title = 'Kmers per Sample'
-        property_title = 'Histogram of Kmers per Sample'
-    else:
-        title_x = 'Read Depth'
-        title_y = '# Observed Features'
-        graph_data = "number of observed features"
-        graph_name = "Reads"
-        barplot_title = 'Reads per Sample'
-        property_title = 'Histogram of Reads per Sample'
-
-    if metric == 'shannon':
-        title_y = 'Shannon Index'
-        graph_data = "Shannon Index"
-
-    chart = alt.Chart(combined_df).mark_line(point=True).encode( 
-        x=alt.X('depth:Q', title=title_x),
-        y=alt.Y('observed_features:Q', title=title_y),
-        color=alt.Color('sample:N', legend=None).scale(scheme='category10')
-    ).add_params(zoom, param_checkbox).properties(title='Rarefaction Curves')
-
-    shaded_area = alt.Chart(pd.DataFrame({
-        'x_min': [0],
-        'x_max': [depth_threshold]
-    })).mark_rect(opacity=0.7, color='peachpuff').encode(
-        x='x_min:Q',
-        x2='x_max:Q'
-    )
-    my_colors = ["#377eb8", "#f781bf", "#984ea3"]
-
-    vertical_lines = alt.Chart(depth_lines).mark_rule(strokeWidth=2).encode(
-        x='x:Q',
-        color=alt.Color('label:N', legend=alt.Legend(title="Thresholds"), scale=alt.Scale(range=my_colors))
-    )
-
-    final_chart = alt.layer(
-        shaded_area, chart, vertical_lines
-    ).resolve_scale(
-        x='shared',
-        color='independent'
-    ).properties(
-        title='Rarefaction Curves',
-        width=450,
-        height=350
-    )
-    
-    vertical_line = alt.Chart(pd.DataFrame({'position': [0]})).mark_rule(color='black', strokeWidth=2).encode(
-        x='position:Q'
-    ).add_params(s).transform_calculate(position='position').transform_filter(param_checkbox
-    ).properties(
-        title='Interactive Vertical Line',
-        width=450, 
-        height=350)
-    
-    final_with_line = alt.layer(final_chart, vertical_line).resolve_scale(x='shared', y='shared')
-
-    text_lines = alt.Chart(pd.DataFrame({'text': ['']})).mark_text(fontSize=16, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
-    upper_chart = alt.vconcat(final_with_line, text_lines).properties(spacing=0)
-    empty_lines = alt.Chart(pd.DataFrame({'text': ['\n\n']})).mark_text(fontSize=12, size=6, align='left', baseline='top', lineBreak="\n", dx=-95).encode(text='text:N').properties(width=100, height=50)
-    upper_chart = alt.vconcat(empty_lines, upper_chart).properties(spacing=0)
-
-    #barplot of reads_per_sample
-    predicate = alt.datum.reads_per_sample >= s 
-
-    barplot = alt.Chart(reads_per_sample_df).mark_bar().encode(
-        x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title=barplot_title),
-        y=alt.Y('count()', title='# Samples'),
-        color=alt.value('steelblue')  
-    ).add_params(
-        s,
-        zoom
-    ).transform_filter(
-        predicate
-    ).transform_calculate(
-        position='position'
-    ).properties(
-        title=property_title,
-        width=450,
-        height=350
-    )
-
-    background = alt.Chart(reads_per_sample_df).mark_bar().encode(
-        x=alt.X('reads_per_sample:Q', bin=alt.Bin(maxbins=50), title=barplot_title),  
-        y=alt.Y('count()', title='# Samples'),
-        color=alt.value('lightgrey')
-    ).add_params(
-        zoom
-    ).properties(
-        title=property_title,
-        width=450,
-        height=350
-    )
-
-    barplot_combined = alt.layer(background, barplot).resolve_scale(x='shared', y='shared')
-    
-    barplot_combined = alt.vconcat(barplot_combined, text_lines).properties(spacing=0)
-    barplot_combined = alt.vconcat(empty_lines, barplot_combined).properties(spacing=0)
-
-    combined_chart = alt.hconcat(upper_chart, barplot_combined).properties(spacing=60).configure_legend(
-        labelFontSize=14,  
-        titleFontSize=14   
-    )
-
-    combined_chart["padding"] = {
-        "top": 0,
-        "left": 0,
-        "right": 0,
-        "bottom": -49  
-    }
-
-    vega_json = combined_chart.to_json()
-
-    TEMPLATES = os.path.join(
-        os.path.dirname(__file__),
-        "assets"
-    )
-
-    add_text = False
-    if (knee_point > depth_threshold):
-        add_text = True
-
-    tabbed_context = {
-        "vega_json": vega_json,
-        "knee_point": json.dumps(int(knee_point)),
-        "percent_samples_100": json.dumps(float(percent_samples_100)),
-        "depth_threshold": json.dumps(int(depth_threshold)),
-        "add_text": bool(add_text),
-        "percentile": json.dumps(float(percentile)),
-        "lower_percentile": json.dumps(float(lower_percentile)),
-        "upper_percentile": json.dumps(float(upper_percentile)),
-        "lower_value": json.dumps(int(lower_value)),
-        "upper_value": json.dumps(int(upper_value)),
-        "graph_data": graph_data,
-        "graph_name": graph_name,
-        "max_read_percentile": json.dumps(int(max_read_percentile)),
-        "beta": False,
-        "beta_metric": metric,
-        "algorithm": str(algorithm)
-    }
-    
-    templates = os.path.join(TEMPLATES, 'index.html')
-
-    copytree(
-        src=TEMPLATES,
-        dst=output_dir,
-        dirs_exist_ok=True 
-    )
-   
-    q2templates.render(templates, output_dir, context=tabbed_context)
     

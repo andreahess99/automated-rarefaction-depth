@@ -3,7 +3,6 @@
 {% block title %}Alpha Diversity{% endblock %}
 
 {% block head %}
-<!-- <title>Embedding Vega-Lite</title> -->
 <script src="./js/bootstrapMagic.js" type="text/javascript"></script>
 <link href="./css/styles.css" rel="stylesheet"/> 
 <script type="text/javascript">
@@ -25,7 +24,6 @@
 <nav class="custom-nav">
     <ul>
         {% for tab in tabs %}
-            {# Check if the URL is index.html to mark as active #}
             <li class="{% if tab.url == 'index.html' %}active{% endif %}">
                 <a href="{{ tab.url }}">{{ tab.title }}</a>
             </li>
@@ -45,7 +43,6 @@
   <div class="row">
     <div class="col-lg-12">
         <div class="card">
-            <!--<h5 class="card-header">Automated Rarefaction Depth Summary</h5>-->
             <div class="card-body">
                 {% if alpha is sameas true %}
                     <div class="toolbar-container">
@@ -110,9 +107,7 @@
 </div>
 
   <script id="vega_json" type="application/json">
-    {{
-        vega_json | safe
-    }}
+    {{vega_json | safe}}
   </script>
 
   <script type="text/javascript">
@@ -165,7 +160,6 @@
                 result.view.logLevel(vega.Warn);
                 window.v = result.view;
 
-                //adding the knee point display 
                 function updateKneeDisplay() {
                     var kp = result.view.signal('knee_point');
                     var display = document.getElementById('knee-point-display');
@@ -193,7 +187,6 @@
     });
   </script>
   
-
   <script>
     // data injected from python
     const isAlpha = {{ alpha | lower }};
@@ -202,8 +195,6 @@
     const csvDataAlpha = {{ csv_data_alpha | tojson }};
     const removedNumericColumns = {{ removed_numeric_columns | tojson if removed_numeric_columns else '[]' }};
   </script>
-
-
   
 
 {% endblock %}

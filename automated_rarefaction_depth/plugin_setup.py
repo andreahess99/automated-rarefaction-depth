@@ -8,12 +8,12 @@
 
 import automated_rarefaction_depth
 from qiime2.plugin import (Plugin, Str, Choices, Int, Bool, Range, Float, List,
-                            Set, Visualization, Metadata, Citations, Collection)
+                            Set, Visualization, Metadata, Citations)
 from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.feature_data import FeatureData, Sequence
-from q2_types.distance_matrix import DistanceMatrix
+#from q2_types.distance_matrix import DistanceMatrix
 from automated_rarefaction_depth import __version__
-from automated_rarefaction_depth._boots_pipeline import pipeline_boots, _rf_visualizer_boots,  _combined_viz #_beta_viz,
+from automated_rarefaction_depth._boots_pipeline import pipeline_boots,  _combined_viz
 
 
 citations = Citations.load("citations.bib", package="automated_rarefaction_depth")
@@ -29,33 +29,7 @@ plugin = Plugin(
 )
  
 
-plugin.visualizers.register_function(
-    function=automated_rarefaction_depth.rarefaction_depth,
-    inputs={'table': FeatureTable[Frequency]},
-    parameters={'seed': Int % Range(1, None),
-                'percent_samples': Float % Range(0, 1),
-                'iterations': Int % Range(1, 100),
-                'table_size': Int % Range(1, None),
-                'steps': Int % Range(5, 100),
-                'algorithm': Str % Choices("kneedle", "gradient")},
-    input_descriptions={
-        'table': ('Feature table to compute rarefaction curves from.')
-    },
-    parameter_descriptions={
-        'seed': 'The seed used for the random subsampling.',
-        'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
-        'iterations': 'The number of times each sample gets rarefied at each depth, a positive number below 100.',
-        'table_size': 'The number of samples to keep in the feature table, a positive number.',
-        'steps': 'The number of points each sample is evaluated at when making the rarefaction curves, choose a number between 5 and 100.',
-        'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.'
-    },
-    name='Automated Rarefaction Depth',
-    description=("Automatically computes an optimal rarefaction depth. Outputs a visualization with the rarefaction curves, the optimal rarefaction depth and a histogram of the reads per sample."),
-    citations=citations,
-)
-
 # descriptions of parameters used in the kmerizer action are copied from the q2-kmerizer plugin
-
 plugin.pipelines.register_function(
     function=pipeline_boots,
     inputs={'table': FeatureTable[Frequency],
@@ -87,7 +61,9 @@ plugin.pipelines.register_function(
         'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.',
         'seed': 'The seed used for the random sampling of samples in case the table is larger than the table_size parameter. A positive integer.',
         'max_depth': 'The maximum depth to evaluate for the rarefaction curves. If None, the maximum depth will be determined automatically.',
-        'metrics': 'The alpha diversity metrics to use for the rarefaction curves. Either observed_features or shannon.',
+        'metrics': 'The different alpha and beta diversity metrics to use for the rarefaction curves. The available metrics are: observed_features, shannon, '
+                'braycurtis, jaccard, simpson, brillouin_d, chao1, enspie, goods_coverage, michaelis_menten_fit, dominance, simpson_e, mcintosh_e, robbins, '
+                'berger_parker_d, hamming, dice, correlation, sokalmichener, yule, jensenshannon, matching, rogerstanimoto, russellrao, sokalsneath, canberra_adkins, cosine, aitchison and canberra.',
         'kmer_size': 'Only needed for kmerizer! Length of kmers to generate.',
         'tfidf': 'Only needed for kmerizer! If True, kmers will be scored using TF-IDF and output '
              'frequencies will be weighted by scores. If False, kmers are counted without TF-IDF scores.',
@@ -115,77 +91,12 @@ plugin.pipelines.register_function(
     citations=citations,
 )
 
-plugin.visualizers.register_function(
-    function=_rf_visualizer_boots,
-    inputs={'combined_df': FeatureTable[Frequency]},
-    parameters={'sorted_depths': List[Int],
-                'percent_samples': Float % Range(0, 1),
-                'metric': Str % Choices(['observed_features', 'shannon']),
-                'max_reads': Int % Range(1, None),
-                'max_read_percentile': Int % Range(1, 100),
-                'depth_threshold': Int % Range(1, None),
-                'reads_per_sample': List[Int],
-                'kmer_run': Bool,
-                'knee_point': Int,
-                'sample_names': List[Str],
-                'algorithm': Str % Choices(['kneedle', 'gradient'])
-                },
-    input_descriptions={
-        'combined_df': 'A table containing the number of distinct features that were found in a sample at a specific depth.'
-    },
-    parameter_descriptions={
-        'sample_names': 'A list of all sample names.',
-        'sorted_depths': 'A list of sorted depths as integers.',
-        'max_read_percentile': 'The maximum read depth percentile used for linearly spacing the evaluated depths.',
-        'percent_samples': 'The minimal percentage of samples you want to keep, choose a decimal between 0 and 1.',
-        'reads_per_sample': 'A list of how many reads each sample has.',
-        'metric': 'The alpha diversity metric to use for the rarefaction curves. Either observed_features or shannon.',
-        'max_reads': 'The maximum amount of reads a single sample has.',
-        'depth_threshold': 'The highest read_depth to still be within the accepted area.', 
-        'knee_point': 'The knee point of the rarefaction curve, used to determine the optimal rarefaction depth.',
-        'kmer_run': 'True if the pipeline was run with the kmerizer, False otherwise.'
-    },
-    name='Automated Rarefaction Depth',
-    description=("Makes the graphs and produces the visualization."),
-    citations=citations,
-)
-
-#beta visualizer
-"""plugin.visualizers.register_function(
-    function=_beta_viz,
-    inputs={},
-    parameters={'metric': Str % Choices(['braycurtis', 'jaccard']),
-                'max_range': List[Float],
-                'kmer_run': Bool,
-                'algorithm': Str % Choices(['kneedle', 'gradient']),
-                'calc_array': List[Float],
-                'num_samples_left': List[Int]
-    },
-    input_descriptions={},
-    parameter_descriptions={
-        'algorithm': "The algorithm which was chosen for the knee point calculation, kneedle or gradient",
-        'metric': 'The beta diversity metric to use for the rarefaction curves. Either jaccard or braycurtis.',
-        'max_range': 'The different read depths at which the distance matrix was calculated.',
-        'kmer_run': 'True if the pipeline was run with the kmerizer, False otherwise.',
-        'calc_array': 'The array of the calculated points.',
-        'num_samples_left': "This array contains how many samples are considered at the considered read depths."
-    },
-    name='Automated Rarefaction Depth',
-    description=("Calculates the knee point and produces the visualization for beta metrics."),
-    citations=citations,
-)"""
-
 #combined visualizer
 plugin.visualizers.register_function(
     function=_combined_viz,
     inputs={},
     parameters={'combined': Metadata,
                 'steps': Int,
-                #'metric': Str % Choices(['observed_features', 'shannon', 'braycurtis', 'jaccard', 'simpson', 'brillouin_d',
-                                     #    'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit','dominance',
-                                      #   'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'canberra_adkins',
-                                       #   'hamming', 'dice', 'aitchison',  'canberra', 'correlation', 'cosine', 'russellrao',
-                                       #   'jensenshannon', 'matching', 'rogerstanimoto', 'yule', 'sokalmichener', 'sokalsneath']), #added some beta metrics
                 'max_reads': Int % Range(1, None),
                 'kmer_run': Bool,
                 'max_range': List[Float],
