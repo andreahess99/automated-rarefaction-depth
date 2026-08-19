@@ -55,8 +55,8 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     alpha_collection_action = ctx.get_action("boots", "alpha_collection")
 
     table_df = table.view(pd.DataFrame)
-    alpha = False
-    beta = False
+    alpha, metrics_alpha = False, []
+    beta, metrics_beta = False, []
 
     if any(m in ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao', 'canberra_adkins',
                          'sokalmichener', 'sokalsneath', 'yule', 'correlation', 'cosine', 'aitchison',  'canberra'] for m in metrics):
@@ -64,7 +64,6 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         metrics_beta = [m for m in metrics if m in ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao',
                          'sokalmichener', 'sokalsneath', 'yule', 'canberra_adkins', 'correlation', 'cosine', 'aitchison',  'canberra']]
     else:
-        metrics_beta = []
         kp_list_beta = None
         df_bars = None
         num_samples = None
@@ -74,12 +73,18 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         alpha = True 
         metrics_alpha = [m for m in metrics if m not in metrics_beta]
 
+    # 1. let's call this "metadata" (instead of "meta_data"), like everywhere else
+    # 2. instead of converting into DF and filtering, you could use the "filter_columns" method
+    # of the Metadata object directly to only keep the categorical columns, see here:
+    # https://develop.qiime2.org/en/stable/plugins/references/metadata-api.html#the-qiime-metadata-class
     meta = meta_data.to_dataframe()
     meta.index.name = "sample"
     # find all numeric metadata columns
     numeric_columns = meta.select_dtypes(include=[np.number]).columns.tolist()
     meta = meta.drop(columns=numeric_columns)
     metadata_columns = ["sample"] + meta.columns.tolist()
+
+    # please clean up all the print statements (unless they are something you want the user to see)
     print(metrics)
     
     #run seqs_to_kmers if sequence is provided
@@ -91,20 +96,29 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         table, = kmer_action(table=table, sequences=sequence, kmer_size=kmer_size, tfidf=tfidf, max_df=max_df, min_df=min_df, max_features=max_features, norm=norm)
         table_df = table.view(pd.DataFrame)
         kmer_run = True
+    # I think this branch is not necessary
     else:
         print("No sequences were provided as input, and therefore, the kmerizer is not run.")
         print("The feature table given as input will be used for the analysis.")
    
     #adjusting table size if it's too big -> keep table_size rows
+    # in plugin_setup you explain that table_size is the number of samples we want to retain - if that's the case
+    # then please rename this variable to indicate it better (e.g. "max_samples" or something like that)
     if (table_size is not None and len(table_df) > table_size):
+        # it would be good to warn the user here that we are subsampling because the table exceeds the limit
         table_df = table_df.sample(n=table_size, random_state=seed)
+
+        # I'm wondering, would it make more sense to first do this and then subsample? otherwise we may be
+        # unnecessarily reducing the size of the table further?
         table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
 
+    # this final table_size is not used anywhere anymore
     table_size = len(table_df)
     reads_per_sample = table_df.sum(axis=1)
 
     #round the max_depth to a nice number
-    if(max_depth is None):
+    if max_depth is None:
+        # extract this variable into a constant PERCENTILE and place it on top of the module
         percentile = 90
         max_reads = int(np.percentile(reads_per_sample, percentile))
         if max_reads < 2000:
@@ -114,83 +128,88 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
     else:
         max_reads = max_depth
 
+    # is this still needed? you already dropped all the numeric columns, right?
     num_cols = meta.select_dtypes(include=[np.number]).columns
     meta[num_cols] = meta[num_cols].fillna(0)
 
-    reads_per_sample_pass = [int(read) for read in reads_per_sample.tolist()]
-    reads_per_sample_merged = pd.DataFrame({"sample": table_df.index.tolist(), "reads": reads_per_sample_pass})
-    reads_per_sample_merged = reads_per_sample_merged.merge(meta, left_on="sample", right_index=True, how="left")     
-    reads_per_sample_merged.index.name = "sample"
-    reads_per_sample_merged = (reads_per_sample_merged.rename(columns={"sample": "sample-id"}).set_index("sample-id"))
+    # I'm gonna simplify this a bit
+    reads_per_sample_merged = pd.DataFrame(
+        {"reads": reads_per_sample.astype(int)},
+        index=table_df.index.rename("sample-id"),
+    ).join(meta, how="left")
    
     sample_list = table_df.index.tolist()
 
+    # I would move this to right under the max_range calculation
+    # also, you should jsut do these two steps in one go and use only one variable
     max_range = np.linspace(1, max_reads, num=steps, dtype=int)
     clean_max_range = [float(x) for x in max_range]
 
+    # this should not be necessary: you should not be zipping these artifacts and passing
+    # them to the visualziation action; instead you should pass the list of artifacts directly
     temp_zip_path = None 
 
     # beta metric specific code
+    # this entire section should move to a separate function
     with tempfile.TemporaryDirectory() as temp_dir:
-        beta_artifact_paths = []
         if beta:
             knee_points_beta = []
             data_beta = []
+            # this whole loop could be simplified to somehting like this:
             for k, metric in enumerate(metrics_beta):
                 print("metric:", metric)
-                num_samples_left = [None] * (steps)
-                avg_difference = [None] * (steps-1)
-                median_difference = [None] * (steps-1)
-                std_difference = [None] * (steps-1)
-                p75_25_difference = [None] * (steps-1)
-                avg_range = [None] * (steps-1)
-                
-                for i in range(steps):
-                    print(f"step {i+1}: {max_range[i]}")
-                    beta_result, = beta_action(table=table, sampling_depth=(int(max_range[i])), metric=metric, n=iterations, replacement=False)
-                
-                    # saving the beta_result file
-                    filename = f"distance_matrix_{metric}_depth_{int(max_range[i])}.qza"
-                    file_path = os.path.join(temp_dir, filename)
-                    beta_result.save(file_path)
-                    beta_artifact_paths.append(file_path)
+                avg_diffs, avg_ranges, num_samples_left = [], [], []
+                old_dm = None
 
+                for i, depth in enumerate(max_range):
+                    depth_int = int(depth)
+                    print(f"step {i + 1}: {depth_int}")
+
+                    beta_result, = beta_action(
+                        table=table,
+                        sampling_depth=depth_int,
+                        metric=metric,
+                        n=iterations,
+                        replacement=False,
+                    )
+
+                    dm = beta_result.view(DistanceMatrix)
                     if k == 0:
-                        num_samples_left[i] = beta_result.view(DistanceMatrix).shape[0] 
+                        num_samples_left.append(dm.shape[0])
 
-                    if i > 0:
-                        #reduce old_beta_result to only the ids present in the current beta_result
-                        old_dm_full = old_beta_result.view(DistanceMatrix)
-                        new_ids = list(beta_result.view(DistanceMatrix).ids)
-                        common_ids = [sid for sid in old_dm_full.ids if sid in new_ids]
+                    if old_dm is not None:
+                        # Filter and align old distance matrix to current IDs
+                        aligned_old_dm = old_dm.filter(dm.ids)
+                        diff = np.abs(dm.data - aligned_old_dm.data)
 
-                        if common_ids:
-                            idxs = [old_dm_full.ids.index(sid) for sid in common_ids]
-                            subdata = old_dm_full.data[np.ix_(idxs, idxs)]
-                            old_dm = DistanceMatrix(subdata, ids=common_ids)
-                    
-                        new_dm = beta_result.view(DistanceMatrix)
-                        difference = np.abs(new_dm.data - old_dm.data)
-                        
-                        avg_difference[i-1] = np.mean(difference[np.triu_indices_from(difference, k=1)])
-                        median_difference[i-1] = np.median(difference[np.triu_indices_from(difference, k=1)])
-                        std_difference[i-1] = np.std(difference[np.triu_indices_from(difference, k=1)])
-                        p75_25_difference[i-1] = np.percentile(difference[np.triu_indices_from(difference, k=1)], 75) - np.percentile(difference[np.triu_indices_from(difference, k=1)], 25)
+                        upper_vals = diff[np.triu_indices_from(diff, k=1)]
+                        avg_diffs.append(
+                            float(np.mean(upper_vals)) if upper_vals.size else 0.0
+                        )
+                        avg_ranges.append((max_range[i - 1] + depth) / 2)
 
-                        avg_range[i-1] = ((max_range[i] - max_range[i-1]) / 2) + max_range[i-1]
-                    
-                    old_beta_result = beta_result
+                    old_dm = dm
 
-                clean_avg_diff = [float(x) if x is not None else 0.0 for x in avg_difference]
-                data_beta.append(pd.DataFrame({'metric': metric, 'depth': avg_range[1:], 'observed': clean_avg_diff[1:]}))
-                if k==0:
-                    df_bars = pd.DataFrame({'depth': avg_range[1:], 'num_samples_left': num_samples_left[2:]})
-                    
-                kpb = knee_point_locator(avg_range[1:], clean_avg_diff[1:], algorithm, "convex", "decreasing")
+                # Drop the first delta (step 1 vs 0) to match your original [1:] slicing
+                eval_ranges = avg_ranges[1:]
+                eval_diffs = avg_diffs[1:]
+
+                data_beta.append(
+                    pd.DataFrame(
+                        {"metric": metric, "depth": eval_ranges, "observed": eval_diffs}
+                    )
+                )
+                if k == 0:
+                    df_bars = pd.DataFrame(
+                        {"depth": eval_ranges, "num_samples_left": num_samples_left[2:]}
+                    )
+
+                kpb = knee_point_locator(
+                    eval_ranges, eval_diffs, algorithm, "convex", "decreasing"
+                )
                 kpb = round(float(kpb)) if kpb is not None else 0
-                knee_points_beta.append(pd.DataFrame({'knee': kpb, 'metric': metric}, index=[0]))
+                knee_points_beta.append(pd.DataFrame({"knee": [kpb], "metric": [metric]}))
                 print("calculated rarefaction depth:", kpb)
-
 
             data_beta = pd.concat(data_beta, ignore_index=True)
             data_beta.columns = ['metric', 'depth', 'observed']
@@ -210,13 +229,14 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
             num_samples = qiime2.Metadata(df_bars)
 
             # make the beta artifacts zip file
-            temp_zip_path = os.path.join(temp_dir, 'beta_matrices.zip')
-            with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for file_path in beta_artifact_paths:
-                    zipf.write(file_path, arcname=os.path.basename(file_path))
+            # temp_zip_path = os.path.join(temp_dir, 'beta_matrices.zip')
+            # with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            #     for file_path in beta_artifact_paths:
+            #         zipf.write(file_path, arcname=os.path.basename(file_path))
         else:
             metrics_beta = None
-        
+
+        # this entire section should move to a separate function
         if alpha:
             #if alpha metric was chosen
             combined_dfs = []
