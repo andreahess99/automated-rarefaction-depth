@@ -35,9 +35,9 @@ plugin.pipelines.register_function(
     inputs={'table': FeatureTable[Frequency],
             'sequence': FeatureData[Sequence]},
     outputs={'visualization': Visualization},
-    parameters={'meta_data': Metadata,
+    parameters={'metadata': Metadata,
                 'iterations': Int % Range(1, 100),
-                'table_size': Int % Range(1, None),
+                'max_samples': Int % Range(1, None),
                 'steps': Int % Range(10, 100), 
                 'algorithm': Str % Choices("kneedle", "gradient"),
                 'seed': Int % Range(1, None),
@@ -56,10 +56,10 @@ plugin.pipelines.register_function(
                 'max_features': Int,
                 'norm': Str % Choices(['None', 'l1', 'l2']) },
     parameter_descriptions={'iterations': 'The number of times each sample gets rarefied at each depth, a positive number below 100.',
-        'table_size': 'The number of samples to keep in the feature table, a positive number.',
+        'max_samples': 'The maximum number of samples to keep in the feature table, a positive number.',
         'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth, choose a number between 5 and 100.',
         'algorithm': 'The algorithm to use for the rarefaction depth calculation, either kneedle or gradient.',
-        'seed': 'The seed used for the random sampling of samples in case the table is larger than the table_size parameter. A positive integer.',
+        'seed': 'The seed used for the random sampling of samples in case the table is larger than the max_samples parameter. A positive integer.',
         'max_depth': 'The maximum depth to evaluate for the rarefaction curves. If None, the maximum depth will be determined automatically.',
         'metrics': 'The different alpha and beta diversity metrics to use for the rarefaction curves. The available metrics are: observed_features, shannon, '
                 'braycurtis, jaccard, simpson, brillouin_d, chao1, enspie, goods_coverage, michaelis_menten_fit, dominance, simpson_e, mcintosh_e, robbins, '
@@ -91,7 +91,6 @@ plugin.pipelines.register_function(
     citations=citations,
 )
 
-#combined visualizer
 plugin.visualizers.register_function(
     function=_combined_viz,
     inputs={},

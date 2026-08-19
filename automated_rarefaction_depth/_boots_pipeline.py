@@ -25,7 +25,7 @@ from skbio import DistanceMatrix
 
 _pipe_defaults = {
     'iterations': 10,
-    'table_size': None,
+    'max_samples': None,
     'steps': 20,
     'algorithm': 'kneedle', 
     'seed': 42,
@@ -39,12 +39,15 @@ _pipe_defaults = {
     'max_depth': None
 }
 
+_DEFAULT_MAX_DEPTH_PERCENTILE = 90
+
 
 #ignore future warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=RuntimeWarning)
+warnings.simplefilter(action='ignore', category=UserWarning)
 
-def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaults['iterations'], table_size=_pipe_defaults['table_size'], metrics=_pipe_defaults['metrics'],
+def pipeline_boots(ctx, table, metadata, sequence=None, iterations=_pipe_defaults['iterations'], max_samples=_pipe_defaults['max_samples'], metrics=_pipe_defaults['metrics'],
                    steps=_pipe_defaults['steps'], algorithm=_pipe_defaults['algorithm'], max_depth=_pipe_defaults['max_depth'],
                    seed = _pipe_defaults['seed'], kmer_size=_pipe_defaults['kmer_size'], tfidf=_pipe_defaults['tfidf'], max_df=_pipe_defaults['max_df'],
                    min_df=_pipe_defaults['min_df'], max_features=_pipe_defaults['max_features'], norm=_pipe_defaults['norm']):
@@ -73,19 +76,15 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         alpha = True 
         metrics_alpha = [m for m in metrics if m not in metrics_beta]
 
-    # 1. let's call this "metadata" (instead of "meta_data"), like everywhere else
     # 2. instead of converting into DF and filtering, you could use the "filter_columns" method
     # of the Metadata object directly to only keep the categorical columns, see here:
     # https://develop.qiime2.org/en/stable/plugins/references/metadata-api.html#the-qiime-metadata-class
-    meta = meta_data.to_dataframe()
+    meta = metadata.to_dataframe()
     meta.index.name = "sample"
     # find all numeric metadata columns
     numeric_columns = meta.select_dtypes(include=[np.number]).columns.tolist()
     meta = meta.drop(columns=numeric_columns)
     metadata_columns = ["sample"] + meta.columns.tolist()
-
-    # please clean up all the print statements (unless they are something you want the user to see)
-    print(metrics)
     
     #run seqs_to_kmers if sequence is provided
     kmer_run = False
@@ -96,43 +95,27 @@ def pipeline_boots(ctx, table, meta_data, sequence=None, iterations=_pipe_defaul
         table, = kmer_action(table=table, sequences=sequence, kmer_size=kmer_size, tfidf=tfidf, max_df=max_df, min_df=min_df, max_features=max_features, norm=norm)
         table_df = table.view(pd.DataFrame)
         kmer_run = True
-    # I think this branch is not necessary
-    else:
-        print("No sequences were provided as input, and therefore, the kmerizer is not run.")
-        print("The feature table given as input will be used for the analysis.")
+
    
-    #adjusting table size if it's too big -> keep table_size rows
-    # in plugin_setup you explain that table_size is the number of samples we want to retain - if that's the case
-    # then please rename this variable to indicate it better (e.g. "max_samples" or something like that)
-    if (table_size is not None and len(table_df) > table_size):
-        # it would be good to warn the user here that we are subsampling because the table exceeds the limit
-        table_df = table_df.sample(n=table_size, random_state=seed)
-
-        # I'm wondering, would it make more sense to first do this and then subsample? otherwise we may be
-        # unnecessarily reducing the size of the table further?
+    #adjusting table size if it's too big -> keep max_samples rows
+    if (max_samples is not None and len(table_df) > max_samples):
         table_df = table_df.loc[:, ~(table_df.isna() | (table_df == 0)).all(axis=0)] 
+        table_df = table_df.sample(n=max_samples, random_state=seed)
+        print(f"Table size is larger than {max_samples}. Randomly subsampling to {max_samples} samples.")
 
-    # this final table_size is not used anywhere anymore
-    table_size = len(table_df)
+
     reads_per_sample = table_df.sum(axis=1)
 
     #round the max_depth to a nice number
     if max_depth is None:
-        # extract this variable into a constant PERCENTILE and place it on top of the module
-        percentile = 90
-        max_reads = int(np.percentile(reads_per_sample, percentile))
+        max_reads = int(np.percentile(reads_per_sample, _DEFAULT_MAX_DEPTH_PERCENTILE))
         if max_reads < 2000:
             max_reads = (int(max_reads / 100) * 100)
         else:
             max_reads = (int(max_reads / 500) * 500)
     else:
         max_reads = max_depth
-
-    # is this still needed? you already dropped all the numeric columns, right?
-    num_cols = meta.select_dtypes(include=[np.number]).columns
-    meta[num_cols] = meta[num_cols].fillna(0)
-
-    # I'm gonna simplify this a bit
+   
     reads_per_sample_merged = pd.DataFrame(
         {"reads": reads_per_sample.astype(int)},
         index=table_df.index.rename("sample-id"),
