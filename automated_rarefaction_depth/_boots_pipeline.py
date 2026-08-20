@@ -40,6 +40,10 @@ _pipe_defaults = {
 }
 
 _DEFAULT_MAX_DEPTH_PERCENTILE = 90
+_alpha_metrics = ['observed_features', 'shannon', 'simpson', 'brillouin_d', 'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit',
+                  'dominance', 'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'jaccard', 'braycurtis']
+_beta_metrics = ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao', 'canberra_adkins',
+                 'sokalmichener', 'sokalsneath', 'yule', 'correlation', 'cosine', 'aitchison',  'canberra']
 
 
 #ignore future warnings
@@ -61,18 +65,16 @@ def pipeline_boots(ctx, table, metadata, sequence=None, iterations=_pipe_default
     alpha, metrics_alpha = False, []
     beta, metrics_beta = False, []
 
-    if any(m in ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao', 'canberra_adkins',
-                         'sokalmichener', 'sokalsneath', 'yule', 'correlation', 'cosine', 'aitchison',  'canberra'] for m in metrics):
+    if any(m in _beta_metrics for m in metrics):
         beta = True
-        metrics_beta = [m for m in metrics if m in ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao',
-                         'sokalmichener', 'sokalsneath', 'yule', 'canberra_adkins', 'correlation', 'cosine', 'aitchison',  'canberra']]
+        metrics_beta = [m for m in metrics if m in _beta_metrics]
     else:
         kp_list_beta = None
         df_bars = None
         num_samples = None
         data_beta = None
         
-    if any(m not in metrics_beta for m in metrics):
+    if any(m in _alpha_metrics for m in metrics):
         alpha = True 
         metrics_alpha = [m for m in metrics if m not in metrics_beta]
 
