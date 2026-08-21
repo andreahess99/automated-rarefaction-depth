@@ -60,8 +60,8 @@
       "name": "legend_groups",
       "source": "raw",
       "transform": [
-        {"type": "formula", "as": "group", "expr": "groupField ? datum[groupField] : datum.sample"},
-        {"type": "filter", "expr": "datum.group != null"},
+        {"type": "formula", "as": "group", "expr": "groupField ? ''+datum[groupField] : ''+datum.sample"},
+        {"type": "filter", "expr": "isValid(datum[groupField]) && datum.group !== 'null' && datum.group !== 'undefined' && datum.group !== 'None'"},
         {"type": "aggregate", "groupby": ["group"]}
       ]
     },
@@ -70,7 +70,8 @@
       "source": "raw",
       "transform": [
         {"type": "filter", "expr": "metricField && datum.metric === metricField"},
-        {"type": "formula", "as": "group", "expr": "groupField && metricField ? datum[groupField] : datum.sample"},
+        {"type": "formula", "as": "group", "expr": "groupField && metricField ? ''+datum[groupField] : ''+datum.sample"},
+        {"type": "filter", "expr": "isValid(datum[groupField]) && datum.group !== 'null' && datum.group !== 'undefined' && datum.group !== 'None'"},
         {"type": "formula", "as": "observed", "expr": "datum.observed"}
       ]
     },
@@ -100,7 +101,8 @@
       "source": "samples",
       "transform": [
         {"type": "flatten", "fields": ["all_depths"], "as": ["depth"]},
-        {"type": "formula", "as": "group", "expr": "datum[groupField]"},
+        {"type": "formula", "as": "group", "expr": "''+datum[groupField]"},
+        {"type": "filter", "expr": "isValid(datum[groupField]) && datum.group !== 'null' && datum.group !== 'undefined' && datum.group !== 'None'"},
         {"type": "filter", "expr": "datum.reads >= datum.depth"},
         {"type": "filter", "expr": "indexof(hidden_groups, ',' + datum.group + ',') < 0"}
       ]
