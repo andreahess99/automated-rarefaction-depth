@@ -95,8 +95,6 @@ plugin.visualizers.register_function(
     function=_combined_viz,
     inputs={},
     parameters={'combined': Metadata,
-                'steps': Int,
-                'max_reads': Int % Range(1, None),
                 'kmer_run': Bool,
                 'max_range': List[Float],
                 'algorithm': Str % Choices(['kneedle', 'gradient']),
@@ -113,8 +111,6 @@ plugin.visualizers.register_function(
                 },
     input_descriptions={},
     parameter_descriptions={
-        'steps': 'The number of depths that get evaluated between the minimum and maximum sample depth.',
-        'max_reads': 'The maximum amount of reads a single sample has.',
         'kmer_run': 'True if the pipeline was run with the kmerizer, False otherwise.',
         'algorithm': "The algorithm which was chosen for the knee point calculation, kneedle or gradient",
         'max_range': 'The different read depths at which the distance matrix was calculated.',

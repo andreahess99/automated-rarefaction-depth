@@ -9,9 +9,7 @@
 import json
 import os
 import base64 
-#import shutil
 from shutil import copytree, copy
-from xxlimited import Str
 import tempfile, zipfile
 import numpy as np
 import pandas as pd
@@ -41,9 +39,29 @@ _pipe_defaults = {
 
 _DEFAULT_MAX_DEPTH_PERCENTILE = 90
 _alpha_metrics = ['observed_features', 'shannon', 'simpson', 'brillouin_d', 'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit',
-                  'dominance', 'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'jaccard', 'braycurtis']
+                  'dominance', 'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d']
 _beta_metrics = ['braycurtis', 'jaccard', 'hamming', 'dice', 'jensenshannon', 'matching', 'rogerstanimoto', 'russellrao', 'canberra_adkins',
                  'sokalmichener', 'sokalsneath', 'yule', 'correlation', 'cosine', 'aitchison',  'canberra']
+_KNEEDLE_CONFIGS = {
+    # Concave / Increasing metrics
+    'observed_features': ('concave', 'increasing'),
+    'shannon': ('concave', 'increasing'),
+    'simpson': ('concave', 'increasing'),
+    'brillouin_d': ('concave', 'increasing'),
+    'chao1': ('concave', 'increasing'),
+    'enspie': ('concave', 'increasing'),
+    'goods_coverage': ('concave', 'increasing'),
+    'michaelis_menten_fit': ('concave', 'increasing'),
+    
+    # Convex / Decreasing metrics
+    'dominance': ('convex', 'decreasing'),
+    'robbins': ('convex', 'decreasing'),
+    'simpson_e': ('convex', 'decreasing'),
+    'mcintosh_e': ('convex', 'decreasing'),
+    'berger_parker_d': ('convex', 'decreasing'),
+    'jaccard': ('convex', 'decreasing'),
+    'braycurtis': ('convex', 'decreasing'),
+}
 
 
 #ignore future warnings
@@ -78,15 +96,11 @@ def pipeline_boots(ctx, table, metadata, sequence=None, iterations=_pipe_default
         alpha = True 
         metrics_alpha = [m for m in metrics if m not in metrics_beta]
 
-    # 2. instead of converting into DF and filtering, you could use the "filter_columns" method
-    # of the Metadata object directly to only keep the categorical columns, see here:
-    # https://develop.qiime2.org/en/stable/plugins/references/metadata-api.html#the-qiime-metadata-class
-    meta = metadata.to_dataframe()
+    categorical_metadata = metadata.filter_columns(column_type='categorical')
+    metadata_columns = ["sample"] + list(categorical_metadata.columns.keys())
+    meta = categorical_metadata.to_dataframe()
     meta.index.name = "sample"
-    # find all numeric metadata columns
-    numeric_columns = meta.select_dtypes(include=[np.number]).columns.tolist()
-    meta = meta.drop(columns=numeric_columns)
-    metadata_columns = ["sample"] + meta.columns.tolist()
+    numeric_columns = list(set(metadata.columns.keys()) - set(categorical_metadata.columns.keys()))
     
     #run seqs_to_kmers if sequence is provided
     kmer_run = False
@@ -105,7 +119,6 @@ def pipeline_boots(ctx, table, metadata, sequence=None, iterations=_pipe_default
         table_df = table_df.sample(n=max_samples, random_state=seed)
         print(f"Table size is larger than {max_samples}. Randomly subsampling to {max_samples} samples.")
 
-
     reads_per_sample = table_df.sum(axis=1)
 
     #round the max_depth to a nice number
@@ -117,18 +130,15 @@ def pipeline_boots(ctx, table, metadata, sequence=None, iterations=_pipe_default
             max_reads = (int(max_reads / 500) * 500)
     else:
         max_reads = max_depth
-   
+
+    max_range = np.linspace(1, max_reads, num=steps, dtype=int)
+
     reads_per_sample_merged = pd.DataFrame(
         {"reads": reads_per_sample.astype(int)},
         index=table_df.index.rename("sample-id"),
     ).join(meta, how="left")
    
     sample_list = table_df.index.tolist()
-
-    # I would move this to right under the max_range calculation
-    # also, you should jsut do these two steps in one go and use only one variable
-    max_range = np.linspace(1, max_reads, num=steps, dtype=int)
-    clean_max_range = [float(x) for x in max_range]
 
     # this should not be necessary: you should not be zipping these artifacts and passing
     # them to the visualziation action; instead you should pass the list of artifacts directly
@@ -138,9 +148,8 @@ def pipeline_boots(ctx, table, metadata, sequence=None, iterations=_pipe_default
     # this entire section should move to a separate function
     with tempfile.TemporaryDirectory() as temp_dir:
         if beta:
-            knee_points_beta = []
-            data_beta = []
-            # this whole loop could be simplified to somehting like this:
+            knee_points_beta, data_beta = [], []
+            
             for k, metric in enumerate(metrics_beta):
                 print("metric:", metric)
                 avg_diffs, avg_ranges, num_samples_left = [], [], []
@@ -175,7 +184,6 @@ def pipeline_boots(ctx, table, metadata, sequence=None, iterations=_pipe_default
 
                     old_dm = dm
 
-                # Drop the first delta (step 1 vs 0) to match your original [1:] slicing
                 eval_ranges = avg_ranges[1:]
                 eval_diffs = avg_diffs[1:]
 
@@ -255,12 +263,7 @@ def pipeline_boots(ctx, table, metadata, sequence=None, iterations=_pipe_default
                 combined_dfs.append(combined)
 
                 #calculating knee point 
-                if metric in ['observed_features', 'shannon', 'simpson', 'brillouin_d', 'chao1', 'enspie', 'goods_coverage', 'michaelis_menten_fit']:
-                    curve_type = "concave"
-                    direction = "increasing"
-                elif metric in ['dominance', 'robbins', 'simpson_e', 'mcintosh_e', 'berger_parker_d', 'jaccard', 'braycurtis']:
-                    curve_type = "convex"
-                    direction = "decreasing"
+                curve_type, direction = _KNEEDLE_CONFIGS[metric]
                 knee_points = [None] * len(sample_list)
                 for i, sample in enumerate(sample_list):
                     array_sample = mean_df[mean_df['sample'] == sample]['mean_observed'].values
@@ -288,22 +291,18 @@ def pipeline_boots(ctx, table, metadata, sequence=None, iterations=_pipe_default
             kp_df.index.name = 'id'
             kp_df.index = kp_df.index.astype(str)
             knee_point_list = qiime2.Metadata(kp_df)
-            metrics = list(metrics)
         else:
-            combined = None
-            knee_point_list = None
-            metrics_alpha = None
-            knee_point = 0
+            combined, knee_point_list, metrics_alpha = None, None, None
             
-        visualization, = viz_combined_action(kmer_run=kmer_run, steps=steps, algorithm=algorithm, kp_list=knee_point_list,
-                            max_reads=int(max_reads), max_range=clean_max_range, alpha_metrics=metrics_alpha, numeric_columns=numeric_columns, 
+        visualization, = viz_combined_action(kmer_run=kmer_run, algorithm=algorithm, kp_list=knee_point_list, 
+                            alpha_metrics=metrics_alpha, numeric_columns=numeric_columns, max_range=max_range.tolist(),
                             combined=combined, metadata_columns=metadata_columns, rps=qiime2.Metadata(reads_per_sample_merged), 
                             kp_list_beta=kp_list_beta, data_beta=data_beta, beta_metrics=metrics_beta, num_samples=num_samples, beta_zip_path=temp_zip_path) 
                             
         return visualization
 
 #calculates the knee point based on the chosen algorithm & metric
-def knee_point_locator(range: list[float], samples: list[float], algorithm: str, curve_type:str, direction:str) -> float:
+def knee_point_locator(range: list[float], samples: list[float], algorithm: str, curve_type: str, direction: str) -> float:
     if algorithm == 'kneedle':
         kneedle = KneeLocator(range, samples, curve=curve_type, direction=direction, S=3)
         knee_point = kneedle.knee
@@ -315,13 +314,12 @@ def knee_point_locator(range: list[float], samples: list[float], algorithm: str,
 
 
 # combined visualization function for alpha and beta metrics
-def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None, algorithm: str = "kneedle", num_samples: qiime2.Metadata = None, steps: int = None, max_reads: int = 1,
-                  metadata_columns: list[str] = None, combined: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None, beta_zip_path: Str = None,
+def _combined_viz(output_dir: str, kmer_run: bool,  algorithm: str = "kneedle", num_samples: qiime2.Metadata = None, max_range: list[float] = None, 
+                  metadata_columns: list[str] = None, combined: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None, beta_zip_path: str = None,
                   kp_list_beta: qiime2.Metadata = None, data_beta: qiime2.Metadata = None, alpha_metrics: list[str] = None, beta_metrics: list[str] = None, numeric_columns: list[str] = None)->None:  
     
     #default values for the tabbed_context
-    beta = False
-    alpha = False
+    alpha, beta = False, False
     zero_beta_metrics = []
 
     # beta metric specific code
@@ -398,15 +396,13 @@ def _combined_viz(output_dir: str, kmer_run: bool, max_range: list[float] = None
 
         for d in spec["data"]:
             if d["name"] == "samples":
-                max_range = np.linspace(1, max_reads, num=steps, dtype=int)
-                depths_list = [int(d) for d in max_range]
                 rps.rename(columns={"sample-id": "sample"}, inplace=True)
                 rps = rps.set_index("sample").reset_index()
                 rps = rps.replace({np.nan: None})
 
                 samples_records = rps.to_dict(orient='records')
                 for s in samples_records:
-                    s["all_depths"] = depths_list
+                    s["all_depths"] = max_range 
                 d["values"] = samples_records
             if d["name"] == "knee_points":
                 d["values"] = kp_list
