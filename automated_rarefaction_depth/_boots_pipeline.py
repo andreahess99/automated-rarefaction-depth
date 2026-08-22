@@ -9,15 +9,16 @@
 import json
 import os
 import base64 
-from shutil import copytree, copy
-import tempfile, zipfile
+import warnings
+from shutil import copytree
+import zipfile
 import numpy as np
 import pandas as pd
 import qiime2
 import q2templates
 from kneed import KneeLocator
-
-import warnings
+import qiime2.sdk.context as Context
+import qiime2.sdk.result as Artifact
 from skbio import DistanceMatrix
 
 
@@ -132,47 +133,43 @@ def pipeline_boots(ctx, table, metadata, sequence=None, iterations=_pipe_default
     ).join(meta, how="left")
    
     sample_list = table_df.index.tolist()
-
-    # this should not be necessary: you should not be zipping these artifacts and passing
-    # them to the visualziation action; instead you should pass the list of artifacts directly
-    temp_zip_path = None 
     
-    with tempfile.TemporaryDirectory() as temp_dir:
-        if beta:
-            # if at least one beta metric was chosen
-            kp_list_beta, data_beta, num_samples = _process_beta_rarefaction(
-                ctx=ctx,
-                table=table,
-                metrics_beta=metrics_beta,
-                max_range=max_range,
-                algorithm=algorithm,
-                iterations=iterations
-            )
-        else:
-            kp_list_beta, data_beta, num_samples, metrics_beta = None, None, None, None
+    if beta:
+        # if at least one beta metric was chosen
+        kp_list_beta, data_beta, num_samples, distance_matrices, matrix_labels = _process_beta_rarefaction(
+            ctx=ctx,
+            table=table,
+            metrics_beta=metrics_beta,
+            max_range=max_range,
+            algorithm=algorithm,
+            iterations=iterations
+        )
+        
+    else:
+        kp_list_beta, data_beta, num_samples, distance_matrices, metrics_beta, matrix_labels = None, None, None, None, None, None
 
-        if alpha:
-            #if at least one alpha metric was chosen
-            combined, knee_point_list = _process_alpha_rarefaction(
-                ctx=ctx,
-                table=table,
-                metrics_alpha=metrics_alpha,
-                max_range=max_range,
-                steps=steps,
-                iterations=iterations,
-                algorithm=algorithm,
-                sample_list=sample_list,
-                meta=meta,
-            )
-        else:
-            combined, knee_point_list, metrics_alpha = None, None, None
+    if alpha:
+        #if at least one alpha metric was chosen
+        combined, knee_point_list = _process_alpha_rarefaction(
+            ctx=ctx,
+            table=table,
+            metrics_alpha=metrics_alpha,
+            max_range=max_range,
+            steps=steps,
+            iterations=iterations,
+            algorithm=algorithm,
+            sample_list=sample_list,
+            meta=meta,
+        )
+    else:
+        combined, knee_point_list, metrics_alpha = None, None, None
             
-        visualization, = viz_combined_action(kmer_run=kmer_run, algorithm=algorithm, kp_list=knee_point_list, 
-                            alpha_metrics=metrics_alpha, numeric_columns=numeric_columns, max_range=max_range.tolist(),
-                            combined=combined, metadata_columns=metadata_columns, rps=qiime2.Metadata(reads_per_sample_merged), 
-                            kp_list_beta=kp_list_beta, data_beta=data_beta, beta_metrics=metrics_beta, num_samples=num_samples, beta_zip_path=temp_zip_path) 
-                            
-        return visualization
+    visualization, = viz_combined_action(kmer_run=kmer_run, algorithm=algorithm, kp_list=knee_point_list, distance_matrices=distance_matrices,
+                        alpha_metrics=metrics_alpha, numeric_columns=numeric_columns, max_range=max_range.tolist(), matrix_labels=matrix_labels,
+                        combined=combined, metadata_columns=metadata_columns, rps=qiime2.Metadata(reads_per_sample_merged), 
+                        kp_list_beta=kp_list_beta, data_beta=data_beta, beta_metrics=metrics_beta, num_samples=num_samples) 
+                        
+    return visualization
 
 #calculates the knee point based on the chosen algorithm & metric
 def _knee_point_locator(range: list[float], samples: list[float], algorithm: str, curve_type: str, direction: str) -> float:
@@ -200,9 +197,10 @@ def _process_sample_data(sample_data: dict, read_depth: int, metric: str) -> lis
 
 
 # calculates beta diversity rarefaction curves, knee points, and sample counts
-def _process_beta_rarefaction(ctx, table, metrics_beta, max_range, algorithm, iterations) -> tuple[qiime2.Metadata, qiime2.Metadata, qiime2.Metadata]:
+def _process_beta_rarefaction(ctx: Context, table: Artifact, metrics_beta: list[str], max_range: np.ndarray, algorithm: str,
+                               iterations: int) -> tuple[qiime2.Metadata, qiime2.Metadata, qiime2.Metadata, list[DistanceMatrix], list[str]]:
     beta_action = ctx.get_action("boots", "beta")
-    knee_points_beta, data_beta = [], []
+    knee_points_beta, data_beta, distance_matrices, matrix_labels = [], [], [], []
     df_bars = None 
 
     for k, metric in enumerate(metrics_beta):
@@ -221,6 +219,9 @@ def _process_beta_rarefaction(ctx, table, metrics_beta, max_range, algorithm, it
                 n=iterations,
                 replacement=False,
             )
+
+            distance_matrices.append(beta_result)
+            matrix_labels.append(f"{metric}_depth_{depth}.tsv")
 
             dm = beta_result.view(DistanceMatrix)
             if k == 0:
@@ -270,12 +271,12 @@ def _process_beta_rarefaction(ctx, table, metrics_beta, max_range, algorithm, it
     df_bars.insert(0, 'id', [f"row{i}" for i in range(len(df_bars))])
     num_samples = qiime2.Metadata(df_bars.set_index('id'))
 
-    return kp_list_beta, data_beta_meta, num_samples
+    return kp_list_beta, data_beta_meta, num_samples, distance_matrices, matrix_labels
 
 
-# calculates alpha diversity rarefaction curves and knee points
-def _process_alpha_rarefaction(ctx, table, metrics_alpha, max_range, steps, iterations, algorithm, 
-    sample_list, meta) -> tuple[qiime2.Metadata, qiime2.Metadata]:
+# calculates alpha diversity rarefaction curves and knee points 
+def _process_alpha_rarefaction(ctx: Context, table: Artifact, metrics_alpha: list[str], max_range: np.ndarray, steps: int, iterations: int, algorithm: str, 
+    sample_list: list[str], meta: pd.DataFrame) -> tuple[qiime2.Metadata, qiime2.Metadata]:
     
     alpha_collection_action = ctx.get_action("boots", "alpha_collection")
     combined_dfs, knee_point_list = [], []
@@ -340,18 +341,15 @@ def _process_alpha_rarefaction(ctx, table, metrics_alpha, max_range, steps, iter
 
 
 # combined visualization function for alpha and beta metrics
-def _combined_viz(output_dir: str, kmer_run: bool,  algorithm: str = "kneedle", num_samples: qiime2.Metadata = None, max_range: list[int] = None, 
-                  metadata_columns: list[str] = None, combined: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None, beta_zip_path: str = None,
+def _combined_viz(output_dir: str, kmer_run: bool,  algorithm: str = "kneedle", num_samples: qiime2.Metadata = None, max_range: list[int] = None, distance_matrices: DistanceMatrix = None,
+                  matrix_labels: list[str] = None, metadata_columns: list[str] = None, combined: qiime2.Metadata = None, rps:qiime2.Metadata = None, kp_list: qiime2.Metadata = None,
                   kp_list_beta: qiime2.Metadata = None, data_beta: qiime2.Metadata = None, alpha_metrics: list[str] = None, beta_metrics: list[str] = None, numeric_columns: list[str] = None)->None:  
     
-    #default values for the tabbed_context
     alpha, beta = False, False
     zero_beta_metrics = []
 
-    # beta metric specific code
     if beta_metrics is not None and len(beta_metrics) > 0:
         beta = True
-
         line_chart_df = data_beta.to_dataframe().reset_index()
         line_chart_df = line_chart_df.drop('id', axis=1)
         kp_list_beta = kp_list_beta.to_dataframe().reset_index()
@@ -363,8 +361,6 @@ def _combined_viz(output_dir: str, kmer_run: bool,  algorithm: str = "kneedle", 
         df_bars = df_bars.drop('id', axis=1)
         df_bars = df_bars.replace({np.nan: None})
 
-
-    #alpha metric specific code
     if alpha_metrics is not None and len(alpha_metrics) > 0:
         alpha = True
         kp_list = kp_list.to_dataframe().reset_index()
@@ -444,14 +440,17 @@ def _combined_viz(output_dir: str, kmer_run: bool,  algorithm: str = "kneedle", 
     vega_json = json.dumps(spec)
     vega_json2 = json.dumps(spec_beta)
 
-    #processing the distance matrix zip file
+    #making the distance matrix zip file
     beta_zip_base64 = ""
-    if beta_zip_path and os.path.exists(beta_zip_path):
-        destination = os.path.join(output_dir, 'beta_matrices.zip')
-        copy(beta_zip_path, destination)
-        with open(beta_zip_path, "rb") as zip_file:
+    if distance_matrices:
+        destination = os.path.join(output_dir, "beta_matrices.zip")
+        with zipfile.ZipFile(destination, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for dm, filename in zip(distance_matrices, matrix_labels):
+                tsv_data = dm.to_data_frame().to_csv(sep='\t')
+                zipf.writestr(filename, tsv_data)
+        with open(destination, "rb") as zip_file:
             encoded_bytes = base64.b64encode(zip_file.read())
-            beta_zip_base64 = encoded_bytes.decode('utf-8')
+            beta_zip_base64 = encoded_bytes.decode("utf-8")
 
     tabbed_context = {
         "tabs": [

@@ -11,7 +11,7 @@ from qiime2.plugin import (Plugin, Str, Choices, Int, Bool, Range, Float, List,
                             Set, Visualization, Metadata, Citations)
 from q2_types.feature_table import FeatureTable, Frequency
 from q2_types.feature_data import FeatureData, Sequence
-#from q2_types.distance_matrix import DistanceMatrix
+from q2_types.distance_matrix import DistanceMatrix
 from automated_rarefaction_depth import __version__
 from automated_rarefaction_depth._boots_pipeline import pipeline_boots,  _combined_viz
 
@@ -93,7 +93,7 @@ plugin.pipelines.register_function(
 
 plugin.visualizers.register_function(
     function=_combined_viz,
-    inputs={},
+    inputs={'distance_matrices': List[DistanceMatrix]},
     parameters={'combined': Metadata,
                 'kmer_run': Bool,
                 'max_range': List[Float],
@@ -107,7 +107,7 @@ plugin.visualizers.register_function(
                 'kp_list_beta': Metadata,
                 'beta_metrics': List[Str],
                 'numeric_columns': List[Str],
-                'beta_zip_path': Str
+                'matrix_labels': List[Str]
                 },
     input_descriptions={},
     parameter_descriptions={
